@@ -18,10 +18,6 @@ pub fn Amnesiac(comptime slots: u8) type {
         handlers: [slots]*const TaskHandler = undefined,
         contexts: [slots]*anyopaque = undefined,
 
-        pub fn init() Self {
-            return .{};
-        }
-
         /// Schedule a task
         pub fn schedule(
             self: *Self,

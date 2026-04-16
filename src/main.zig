@@ -18,10 +18,11 @@ const pin_config = rp2xxx.pins.GlobalConfiguration{
 const Blinker = struct {
     pin: rp2xxx.gpio.Pin,
     delay_us: microzig.drivers.time.Duration,
+    slot: u8,
 
     pub fn schedule(self: *Blinker, amnesiac: *Scheduler) void {
         const deadline = amnesiac.now.add_duration(self.delay_us);
-        amnesiac.schedule(0, deadline, step, self);
+        amnesiac.schedule(self.slot, deadline, step, self);
     }
 
     pub fn step(ctx: *anyopaque, amnesiac: *Scheduler) void {
@@ -35,11 +36,12 @@ const Scheduler = amn.Amnesiac(2);
 
 pub fn main() !void {
     const pins = pin_config.apply();
-    var scheduler = Scheduler.init();
+    var scheduler = Scheduler{};
 
     var blinker = Blinker{
         .pin = pins.led,
         .delay_us = microzig.drivers.time.Duration.from_us(250_000),
+        .slot = 0,
     };
     blinker.schedule(&scheduler);
 
