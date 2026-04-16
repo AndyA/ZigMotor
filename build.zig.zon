@@ -1,12 +1,12 @@
 .{
-    .name = .MicroZig,
+    .name = .ZigMotor,
     .version = "0.0.0",
-    .fingerprint = 0xa161a71edc3a96a6, // Changing this has security and trust implications.
-    .minimum_zig_version = "0.15.1",
+    .fingerprint = 0x66abdaea77c011c9,
+    .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .microzig = .{
-            .url = "https://github.com/ZigEmbeddedGroup/microzig/releases/download/0.15.1/microzig.tar.gz",
-            .hash = "microzig-0.15.1-D20YSQYfCACrGl4NnHj6WXgGJUJvoEvLOJKBzeBzt-qX",
+            .url = "git+https://github.com/ZigEmbeddedGroup/microzig#zig-master",
+            .hash = "microzig-0.15.2-D20YSR8O4AAG5lfKNXT2ESJNYIyQOhbHof5zb52Ylrjq",
         },
     },
     .paths = .{
