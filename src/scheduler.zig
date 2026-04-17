@@ -9,6 +9,7 @@ pub const TaskHandler = fn (ctx: *anyopaque, slot: *ScheduleSlot) void;
 pub const Never = time.Absolute.from_us(std.math.maxInt(u64));
 pub const Now = time.Absolute.from_us(0);
 
+/// A single scheduler slot
 pub const ScheduleSlot = struct {
     const Self = @This();
 
@@ -28,6 +29,11 @@ pub const ScheduleSlot = struct {
         self.deadline = deadline;
         self.handler = handler;
         self.context = context;
+    }
+
+    pub fn delay(self: *Self, delay_us: u64) void {
+        assert(self.deadline == Never);
+        self.deadline = self.then.add_duration(time.Duration.from_us(delay_us));
     }
 
     pub fn poll(self: *Self, now: time.Absolute) bool {

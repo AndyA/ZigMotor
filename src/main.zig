@@ -1,14 +1,14 @@
-const std = @import("std");
-
 const microzig = @import("microzig");
-const rp2xxx = microzig.hal;
-const time = rp2xxx.time;
-const GPIO_Device = rp2xxx.drivers.GPIO_Device;
+const hal = microzig.hal;
+const time = microzig.drivers.time;
 
 const sched = @import("scheduler.zig");
+const events = @import("events.zig");
+
+const STSpin = @import("STSpin.zig");
 
 // Compile-time pin configuration
-const pin_config = rp2xxx.pins.GlobalConfiguration{
+const pin_config = hal.pins.GlobalConfiguration{
     .GPIO14 = .{ .name = "led1", .direction = .out },
     .GPIO15 = .{ .name = "led2", .direction = .out },
     .GPIO16 = .{ .name = "led3", .direction = .out },
@@ -19,13 +19,13 @@ const pin_config = rp2xxx.pins.GlobalConfiguration{
 const Blinker = struct {
     const Self = @This();
 
-    pin: rp2xxx.gpio.Pin,
+    pin: hal.gpio.Pin,
     delay: microzig.drivers.time.Duration,
 
-    pub fn init_us(pin: rp2xxx.gpio.Pin, delay_us: u64) Self {
+    pub fn init_us(pin: hal.gpio.Pin, delay_us: u64) Self {
         return Self{
             .pin = pin,
-            .delay = microzig.drivers.time.Duration.from_us(delay_us),
+            .delay = time.Duration.from_us(delay_us),
         };
     }
 
@@ -34,7 +34,7 @@ const Blinker = struct {
         slot.schedule(deadline, step, self);
     }
 
-    pub fn step(ctx: *anyopaque, slot: *sched.ScheduleSlot) void {
+    fn step(ctx: *anyopaque, slot: *sched.ScheduleSlot) void {
         const self: *Blinker = @ptrCast(@alignCast(ctx));
         self.pin.toggle();
         self.schedule(slot);
@@ -59,10 +59,11 @@ pub fn main() !void {
     led4.schedule(scheduler.pri(4));
 
     while (true) {
-        _ = scheduler.poll(time.get_time_since_boot());
+        _ = scheduler.poll(hal.time.get_time_since_boot());
     }
 }
 
 test {
     _ = @import("scheduler.zig");
+    _ = @import("events.zig");
 }
