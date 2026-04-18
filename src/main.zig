@@ -31,10 +31,10 @@ const Blinker = struct {
 
     pub fn schedule(self: *Self, slot: *sched.ScheduleSlot) void {
         const deadline = slot.now.add_duration(self.delay);
-        slot.schedule(deadline, step, self);
+        slot.schedule(deadline, task, self);
     }
 
-    fn step(ctx: *anyopaque, slot: *sched.ScheduleSlot) void {
+    fn task(ctx: *anyopaque, slot: *sched.ScheduleSlot) void {
         const self: *Self = @ptrCast(@alignCast(ctx));
         self.pin.toggle();
         self.schedule(slot);
@@ -66,4 +66,5 @@ pub fn main() !void {
 test {
     _ = @import("scheduler.zig");
     _ = @import("events.zig");
+    _ = @import("STSpin.zig");
 }
