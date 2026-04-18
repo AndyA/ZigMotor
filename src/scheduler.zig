@@ -6,8 +6,8 @@ const time = microzig.drivers.time;
 const assert = std.debug.assert;
 
 pub const TaskHandler = fn (ctx: *anyopaque, slot: *ScheduleSlot) void;
-pub const Never = time.Absolute.from_us(std.math.maxInt(u64));
 pub const Now = time.Absolute.from_us(0);
+pub const Never = time.Absolute.from_us(std.math.maxInt(u64));
 
 /// A single scheduler slot
 pub const ScheduleSlot = struct {
