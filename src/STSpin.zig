@@ -10,7 +10,9 @@ const events = @import("events.zig");
 
 const Self = @This();
 
-pub const IDLE_POLL_RATE = 100; // µS
+// During idling we wake up every 100µS to notice whether
+// we need to do anything
+pub const IDLE_TIME = 100; // µS
 
 // We assert STEP for up to 2µS. If we used 1µS we might
 // sometimes get a much shorter delay due to scheduler
@@ -28,15 +30,13 @@ pub const Config = struct {
     reset_pin: ?hal.gpio.Pin = null,
 };
 
-pub const Ramp = struct {};
-
 pub const State = enum(u8) {
     INIT,
     IDLE,
     STOPPING,
     STEP,
     STEPPED,
-    SET_DIRECTION,
+    MOVING,
     MODE_SETUP,
     MODE_HOLD,
 };
@@ -62,29 +62,53 @@ microstep: struct {
     current: u16 = 16, // current hardware setting when no full-step override
 } = .{},
 
-// microstep: u16 = 16,
-// full_step: bool = false, // step size == 1
 direction: Direction = .UNKNOWN,
 
-// Current speed in hundredths of an RPM
-speed_rpm100: u32,
+/// Current speed in hundredths of an RPM
+speed_rpm100: u32 = 0,
 
-// Number of steps still to perform
+/// Number of steps still to perform
 steps_remaining: i32 = 0,
-// Current per-step interval
+
+/// Current per-step interval
 us_per_step: u32 = 0,
 
+/// Event emitter - gets notifications of significant state changes:
+///   .INIT <=> .IDLE
+///   .IDLE <=> .MOVING
 ee: events.Emitter(EventPayload, 5) = .empty,
+
+/// Realtime event emitter - called after every step before the delay
+/// to the next step is calculated. Event handlers can usefully vary
+/// the speed here. Only allows one subscriber because it makes no
+/// sense to have multiple parties fighting over control of the
+/// speed.
+rt_ee: events.Emitter(*Self, 1) = .empty,
 
 pub fn start(self: *Self, slot: *ScheduleSlot) void {
     assert(self.state == .INIT);
     self.adviseState(.IDLE);
+
+    const pins = .{
+        self.config.mode1_pin,
+        self.config.mode2_pin,
+        self.config.reset_pin,
+    };
+
+    inline for (pins) |maybe_pin| {
+        if (maybe_pin) |pin| {
+            pin.put(1);
+        }
+    }
+
     slot.schedule(slot.then, stateMachine, self);
 }
 
 pub fn stop(self: *Self) void {
-    if (self.state != .IDLE) {
+    if (self.state != .INIT) {
         self.state = .STOPPING;
+        self.speed_rpm100 = 0;
+        self.steps_remaining = 0;
     }
 }
 
@@ -102,7 +126,7 @@ pub fn setSpeed(self: *Self, rpm100: u32) void {
         const spr = self.stepsPerRevolution();
         const max_rpm100 = std.math.maxInt(u32) / spr;
         const spm100 = @min(max_rpm100, rpm100) * spr;
-        self.us_per_step = (1_000_000 * 60 * 100 / 2) / (spm100 / 2);
+        self.us_per_step = @max(STEP_TIME, (1_000_000 * 60 * 100 / 2) / (spm100 / 2));
     }
     self.speed_rpm100 = rpm100;
 }
@@ -160,7 +184,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
 
     sm: switch (self.state) {
         .INIT => unreachable,
-        .SET_DIRECTION => {
+        .MOVING => {
             if (self.steps_remaining == 0) {
                 self.adviseState(.IDLE);
                 continue :sm self.state;
@@ -186,8 +210,11 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
             }
 
             if (self.speed_rpm100 == 0) {
+                // Emit a real-time event so that setSpeed can be called
+                // to get us moving again.
+                self.rt_ee.emit(self);
                 // Loop while we wait for non-zero speed
-                slot.delay(IDLE_POLL_RATE);
+                slot.delay(IDLE_TIME);
             } else {
                 self.config.step_pin.put(1);
                 self.state = .STEPPED;
@@ -210,7 +237,11 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
                 continue :sm self.state;
             }
 
-            self.state = .SET_DIRECTION;
+            // Emit a real-time event so that setSpeed can be called
+            // before we delay.
+            self.rt_ee.emit(self);
+
+            self.state = .MOVING;
             slot.delay(self.us_per_step - STEP_TIME);
         },
         .MODE_SETUP => {
@@ -230,6 +261,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
                 // set reset low
                 // set mode bits
                 // wait 1µS
+                // go to .MODE_HOLD
                 self.config.reset_pin.?.put(0);
                 const bits = lookupMicrostep(pending);
                 self.config.mode1_pin.?.put(bitSet(bits, 0));
@@ -263,13 +295,16 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
             }
 
             if (self.steps_remaining != 0) {
-                self.state = .SET_DIRECTION;
+                self.adviseState(.MOVING);
                 continue :sm self.state;
             }
 
-            slot.delay(IDLE_POLL_RATE);
+            slot.delay(IDLE_TIME);
         },
         .STOPPING => {
+            if (self.config.reset_pin) |reset_pin| {
+                reset_pin.put(0);
+            }
             self.adviseState(.INIT);
             // don't reschedule
         },

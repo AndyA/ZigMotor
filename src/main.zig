@@ -20,7 +20,7 @@ const Blinker = struct {
     const Self = @This();
 
     pin: hal.gpio.Pin,
-    delay: microzig.drivers.time.Duration,
+    delay: time.Duration,
 
     pub fn init_us(pin: hal.gpio.Pin, delay_us: u64) Self {
         return Self{
@@ -29,13 +29,13 @@ const Blinker = struct {
         };
     }
 
-    pub fn schedule(self: *Blinker, slot: *sched.ScheduleSlot) void {
-        const deadline = slot.then.add_duration(self.delay);
+    pub fn schedule(self: *Self, slot: *sched.ScheduleSlot) void {
+        const deadline = slot.now.add_duration(self.delay);
         slot.schedule(deadline, step, self);
     }
 
     fn step(ctx: *anyopaque, slot: *sched.ScheduleSlot) void {
-        const self: *Blinker = @ptrCast(@alignCast(ctx));
+        const self: *Self = @ptrCast(@alignCast(ctx));
         self.pin.toggle();
         self.schedule(slot);
     }
@@ -45,7 +45,7 @@ const Scheduler = sched.makeScheduler(5);
 
 pub fn main() !void {
     const pins = pin_config.apply();
-    var scheduler = Scheduler{};
+    var scheduler: Scheduler = .empty;
 
     var blinker = Blinker.init_us(pins.led, 250_000);
     blinker.schedule(scheduler.pri(0));
