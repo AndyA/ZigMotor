@@ -80,10 +80,11 @@ ee: events.Emitter(EventPayload, 5) = .empty,
 
 /// Realtime event emitter - called after every step before the delay
 /// to the next step is calculated. Event handlers can usefully vary
-/// the speed here. Only allows one subscriber because it makes no
+/// the speed here. Only allows two subscribers because it makes no
 /// sense to have multiple parties fighting over control of the
-/// speed.
-rt_ee: events.Emitter(*Self, 1) = .empty,
+/// speed. Having two allows a handler to be hooked with `once` and
+/// be able to re-hook using `once` again from within the handler.
+rt_ee: events.Emitter(*Self, 2) = .empty,
 
 pub fn start(self: *Self, slot: *ScheduleSlot) void {
     assert(self.state == .INIT);
@@ -179,11 +180,29 @@ fn adviseState(self: *Self, state: State) void {
     self.ee.emit(.{ .target = self, .state = state });
 }
 
+fn bitSet(bits: u4, pos: u3) u1 {
+    return if ((bits & (1 << pos)) != 0) 1 else 0;
+}
+
 fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
     const self: *Self = @ptrCast(@alignCast(ctx));
 
     sm: switch (self.state) {
         .INIT => unreachable,
+        .IDLE => {
+            if (self.microstep.pending != self.microstep.active) {
+                self.state = .MODE_SETUP;
+                continue :sm self.state;
+            }
+
+            if (self.steps_remaining != 0) {
+                self.adviseState(.MOVING);
+                continue :sm self.state;
+            }
+
+            slot.delay(IDLE_TIME);
+        },
+
         .MOVING => {
             if (self.steps_remaining == 0) {
                 self.adviseState(.IDLE);
@@ -195,6 +214,8 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
             const new_direction: Direction = if (self.steps_remaining < 0) .CCW else .CW;
             if (new_direction == self.direction)
                 continue :sm self.state; // all set, go and step
+
+            self.direction = new_direction;
 
             self.config.dir_pin.put(switch (new_direction) {
                 .CW => 1,
@@ -288,19 +309,6 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
             self.config.reset_pin.?.put(1);
             slot.delay(MODE_HOLD_TIME);
         },
-        .IDLE => {
-            if (self.microstep.pending != self.microstep.active) {
-                self.state = .MODE_SETUP;
-                continue :sm self.state;
-            }
-
-            if (self.steps_remaining != 0) {
-                self.adviseState(.MOVING);
-                continue :sm self.state;
-            }
-
-            slot.delay(IDLE_TIME);
-        },
         .STOPPING => {
             if (self.config.reset_pin) |reset_pin| {
                 reset_pin.put(0);
@@ -309,8 +317,4 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
             // don't reschedule
         },
     }
-}
-
-fn bitSet(bits: u4, pos: u3) u1 {
-    return if ((bits & (1 << pos)) != 0) 1 else 0;
 }
