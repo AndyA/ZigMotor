@@ -47,6 +47,16 @@ pub const ScheduleSlot = struct {
     }
 };
 
+// test ScheduleSlot {
+//     const Task = struct {
+//         pub fn task(ctx: *anyopaque, slot: *ScheduleSlot) void {
+//             _ = ctx;
+//             slot.delay(10);
+//         }
+//     };
+//     var slot: ScheduleSlot = .{};
+// }
+
 pub fn makeScheduler(comptime size: u8) type {
     return struct {
         const Self = @This();

@@ -29,6 +29,13 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
+    // const mz = b.dependency("microzig", .{
+    //     .target = target,
+    //     .optimize = optimize,
+    // });
+
+    // unit_tests.root_module.addImport("microzig", mz.module("microzig"));
+
     const unit_tests_run = b.addRunArtifact(unit_tests);
     const test_step = b.step("test", "Run platform agnostic unit tests");
     test_step.dependOn(&unit_tests_run.step);
