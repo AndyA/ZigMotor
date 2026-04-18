@@ -21,20 +21,22 @@ pub fn build(b: *std.Build) void {
 
     mb.install_firmware(firmware, .{});
 
+    // const mz_test_dep = b.dependency("microzig", .{
+    //     .target = target,
+    //     .optimize = optimize,
+    // });
+
     const unit_tests = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
             .target = target,
             .optimize = optimize,
+            // .imports = &.{.{
+            //     .name = "microzig",
+            //     .module = mz_test_dep.module("microzig"),
+            // }},
         }),
     });
-
-    // const mz = b.dependency("microzig", .{
-    //     .target = target,
-    //     .optimize = optimize,
-    // });
-
-    // unit_tests.root_module.addImport("microzig", mz.module("microzig"));
 
     const unit_tests_run = b.addRunArtifact(unit_tests);
     const test_step = b.step("test", "Run platform agnostic unit tests");
