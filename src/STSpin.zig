@@ -36,13 +36,16 @@ pub const Config = struct {
 pub const State = enum(u8) {
     INIT,
     IDLE,
-    STOPPING,
+
+    MOVING,
     STEP,
     STEPPING,
     STEPPED,
-    MOVING,
+
     MODE_SETUP,
     MODE_HOLD,
+
+    STOPPING,
 };
 
 pub const EventPayload = struct {
@@ -208,6 +211,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
 
             slot.delay(IDLE_TIME);
         },
+
         .MOVING => {
             if (self.steps_remaining == 0) {
                 self.adviseState(.IDLE);
@@ -274,6 +278,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
 
             continue :sm self.state;
         },
+
         .MODE_SETUP => {
             const pending = self.microstep.pending;
             assert(pending != self.microstep.active);
@@ -318,6 +323,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
             self.config.reset_pin.?.put(1);
             slot.delay(MODE_HOLD_TIME);
         },
+
         .STOPPING => {
             if (self.config.reset_pin) |reset_pin|
                 reset_pin.put(0);
