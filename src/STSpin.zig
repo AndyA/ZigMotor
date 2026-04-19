@@ -364,6 +364,8 @@ const MotorRunner = struct {
     pub fn advance(self: *MotorRunner) void {
         self.timestamp = self.slot.deadline;
         _ = self.slot.poll(self.timestamp);
+        const stepper: *STSpin = @ptrCast(@alignCast(self.slot.context));
+        self.state = stepper.state;
     }
 
     pub fn advanceToState(self: *MotorRunner, state: State, max_steps: u32) void {
@@ -402,7 +404,6 @@ const MotorRunner = struct {
 
     fn onStateChange(ctx: *anyopaque, e: EventPayload) void {
         const self: *MotorRunner = @ptrCast(@alignCast(ctx));
-        self.state = e.state;
         self.logEvent(.{ .timestamp = self.timestamp, .payload = .{ .state = e } });
     }
 };
@@ -438,14 +439,18 @@ test STSpin {
     try expectEqual(.IDLE, stepper.state);
 
     stepper.setSpeed(6000); // 60rpm
+    // print("µS/step = {d}\n", .{stepper.us_per_step});
     // stepper.setMicrostep(8);
-    stepper.rotate(4);
-    try expectEqual(4, stepper.steps_remaining);
+    stepper.rotate(2);
 
     runner.advanceToState(.IDLE, 100);
 
-    print("{any}\n", .{runner.slot});
-    print("{d}\n", .{stepper.steps_remaining});
+    stepper.rotate(-4);
+
+    runner.advanceToState(.IDLE, 100);
+
+    // print("{any}\n", .{runner.slot});
+    // print("{d}\n", .{stepper.steps_remaining});
 
     for (runner.log.items) |item| {
         print("{f}\n", .{item});
