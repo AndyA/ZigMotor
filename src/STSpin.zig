@@ -206,6 +206,9 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
 
             if (self.steps_remaining != 0) {
                 self.adviseState(.MOVING);
+                // Emit a real-time event so that setSpeed can be called
+                // before we move.
+                self.rt_ee.emit(self);
                 continue :sm self.state;
             }
 

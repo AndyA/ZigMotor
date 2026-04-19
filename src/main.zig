@@ -53,9 +53,9 @@ pub fn main() !void {
     led1.schedule(scheduler.pri(1));
     var led2 = Blinker.init_us(pins.led2, 125_010);
     led2.schedule(scheduler.pri(2));
-    var led3 = Blinker.init_us(pins.led3, 125_020);
+    var led3 = Blinker.init_us(pins.led3, 125_030);
     led3.schedule(scheduler.pri(3));
-    var led4 = Blinker.init_us(pins.led4, 125_030);
+    var led4 = Blinker.init_us(pins.led4, 125_050);
     led4.schedule(scheduler.pri(4));
 
     while (true) {
