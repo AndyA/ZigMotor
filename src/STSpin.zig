@@ -356,11 +356,11 @@ const MotorRunner = struct {
             state: EventPayload,
         },
 
-        pub fn format(self: MotorEvent, writer: *std.Io.Writer) std.Io.Writer.Error!void {
-            try writer.print("[{d:>6}] ", .{self.timestamp.to_us()});
+        pub fn format(self: MotorEvent, w: *std.Io.Writer) std.Io.Writer.Error!void {
+            try w.print("[{d:>6}] ", .{self.timestamp.to_us()});
             switch (self.payload) {
-                .pin => |p| try writer.print("  pin {s:<6} = {d}", .{ p.name, p.state }),
-                .state => |s| try writer.print("state {s}{s}", .{
+                .pin => |p| try w.print("  pin {s:<6} = {d}", .{ p.name, p.state }),
+                .state => |s| try w.print("state {s}{s}", .{
                     if (s.rt) "RT " else "",
                     @tagName(s.state),
                 }),
