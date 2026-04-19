@@ -55,17 +55,6 @@ pub fn Emitter(comptime PayloadType: type, comptime size: u8) type {
             self.used += 1;
         }
 
-        pub fn addListener(self: *Self, handler: HandlerType, context: *anyopaque) void {
-            assert(self.find(0, handler, context) == null);
-            self.add(handler, context, false);
-        }
-
-        pub fn once(self: *Self, handler: HandlerType, context: *anyopaque) void {
-            assert(self.find(self.hot, handler, context) == null);
-            self.add(handler, context, true);
-            self.mortals += 1;
-        }
-
         fn find(self: Self, from: u8, handler: HandlerType, context: *anyopaque) ?u8 {
             for (self.slots[from..self.used], from..) |slot, index| {
                 if (slot.handler == handler and slot.context == context)
@@ -90,6 +79,17 @@ pub fn Emitter(comptime PayloadType: type, comptime size: u8) type {
                 self.used -= 1;
                 return 0;
             }
+        }
+
+        pub fn addListener(self: *Self, handler: HandlerType, context: *anyopaque) void {
+            assert(self.find(0, handler, context) == null);
+            self.add(handler, context, false);
+        }
+
+        pub fn once(self: *Self, handler: HandlerType, context: *anyopaque) void {
+            assert(self.find(self.hot, handler, context) == null);
+            self.add(handler, context, true);
+            self.mortals += 1;
         }
 
         pub fn removeListener(self: *Self, handler: HandlerType, context: *anyopaque) void {
