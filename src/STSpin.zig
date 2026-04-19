@@ -1,9 +1,12 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-const microzig = @import("microzig");
+const microzig = if (@import("builtin").is_test)
+    @import("testing/microzig.zig")
+else
+    @import("microzig");
+
 const hal = microzig.hal;
-const time = microzig.drivers.time;
 
 const ScheduleSlot = @import("scheduler.zig").ScheduleSlot;
 const events = @import("events.zig");
@@ -21,13 +24,13 @@ pub const STEP_TIME = 2; // µS
 pub const MODE_HOLD_TIME = 100; // µS
 
 pub const Config = struct {
-    step_pin: hal.gpio.Pin,
-    dir_pin: hal.gpio.Pin,
+    step_pin: *hal.gpio.Pin,
+    dir_pin: *hal.gpio.Pin,
     steps_per_revolution: u16 = 200,
-    mode1_pin: ?hal.gpio.Pin = null,
-    mode2_pin: ?hal.gpio.Pin = null,
-    en_fault_pin: ?hal.gpio.Pin = null,
-    reset_pin: ?hal.gpio.Pin = null,
+    mode1_pin: ?*hal.gpio.Pin = null,
+    mode2_pin: ?*hal.gpio.Pin = null,
+    en_fault_pin: ?*hal.gpio.Pin = null,
+    reset_pin: ?*hal.gpio.Pin = null,
 };
 
 pub const State = enum(u8) {
@@ -46,7 +49,7 @@ pub const EventPayload = struct {
     state: State,
 };
 
-pub const Direction = enum(u1) {
+pub const Direction = enum(u2) {
     CW,
     CCW,
     UNKNOWN, // at startup
@@ -102,7 +105,7 @@ pub fn start(self: *Self, slot: *ScheduleSlot) void {
         }
     }
 
-    slot.schedule(slot.then, stateMachine, self);
+    slot.schedule(slot.now, stateMachine, self);
 }
 
 pub fn stop(self: *Self) void {
@@ -180,8 +183,8 @@ fn adviseState(self: *Self, state: State) void {
     self.ee.emit(.{ .target = self, .state = state });
 }
 
-fn bitSet(bits: u4, pos: u3) u1 {
-    return if ((bits & (1 << pos)) != 0) 1 else 0;
+fn bitSet(bits: u4, pos: u2) u1 {
+    return if ((bits & (@as(u4, 1) << pos)) != 0) 1 else 0;
 }
 
 fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
@@ -250,7 +253,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
                 continue :sm self.state;
             }
 
-            const delta = if (self.steps_remaining < 0) 1 else -1;
+            const delta: i32 = if (self.steps_remaining < 0) 1 else -1;
             self.steps_remaining += delta;
 
             if (self.steps_remaining == 0) {
@@ -270,7 +273,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
             assert(pending != self.microstep.active);
             if (pending == 1 or pending == self.microstep.current) {
                 // just diddle the mode bits and wait a bit
-                const bit = if (pending == 1) 0 else 1;
+                const bit: u1 = if (pending == 1) 0 else 1;
                 self.config.mode1_pin.?.put(bit);
                 self.config.mode2_pin.?.put(bit);
 
@@ -287,8 +290,8 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
                 const bits = lookupMicrostep(pending);
                 self.config.mode1_pin.?.put(bitSet(bits, 0));
                 self.config.mode2_pin.?.put(bitSet(bits, 1));
-                self.config.step_pin.?.put(bitSet(bits, 2));
-                self.config.dir_pin.?.put(bitSet(bits, 3));
+                self.config.step_pin.put(bitSet(bits, 2));
+                self.config.dir_pin.put(bitSet(bits, 3));
 
                 self.microstep.active = pending;
                 self.microstep.current = pending;
@@ -317,4 +320,136 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
             // don't reschedule
         },
     }
+}
+
+const STSpin = Self;
+const Pin = hal.gpio.Pin;
+const Absolute = microzig.drivers.time.Absolute;
+const expectEqual = std.testing.expectEqual;
+const print = std.debug.print;
+const Allocator = std.mem.Allocator;
+
+const MotorRunner = struct {
+    const MotorEvent = struct {
+        timestamp: Absolute,
+        payload: union(enum) {
+            pin: Pin.Event,
+            state: EventPayload,
+        },
+
+        pub fn format(self: MotorEvent, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+            try writer.print("[{d:>6}] ", .{self.timestamp.to_us()});
+            switch (self.payload) {
+                .pin => |p| try writer.print("pin {d} = {d}", .{ p.target.id, p.state }),
+                .state => |s| try writer.print("state {s}", .{@tagName(s.state)}),
+            }
+        }
+    };
+
+    allocator: Allocator,
+    timestamp: Absolute = .from_us(0),
+    slot: ScheduleSlot = .{},
+    emitter: Pin.Emitter = .empty,
+    log: std.ArrayList(MotorEvent) = .empty,
+    state: State = .INIT,
+
+    pub fn init(allocator: Allocator) MotorRunner {
+        return .{ .allocator = allocator };
+    }
+
+    pub fn deinit(self: *MotorRunner) void {
+        self.log.deinit(self.allocator);
+    }
+
+    pub fn advance(self: *MotorRunner) void {
+        self.timestamp = self.slot.deadline;
+        _ = self.slot.poll(self.timestamp);
+    }
+
+    pub fn advanceToState(self: *MotorRunner, state: State, max_steps: u32) void {
+        var avail_steps = max_steps;
+
+        while (avail_steps > 0 and self.state == state) : (avail_steps -= 1)
+            self.advance();
+
+        while (avail_steps > 0 and self.state != state) : (avail_steps -= 1)
+            self.advance();
+
+        assert(avail_steps > 0);
+    }
+
+    pub fn pin(self: *MotorRunner, id: u8) Pin {
+        return .{ .emitter = &self.emitter, .id = id };
+    }
+
+    pub fn attach(self: *MotorRunner, stepper: *STSpin) void {
+        stepper.ee.addListener(onStateChange, self);
+        self.emitter.addListener(onPinChange, self);
+    }
+
+    pub fn clearLog(self: *MotorRunner) void {
+        self.log.items.len = 0;
+    }
+
+    fn logEvent(self: *MotorRunner, event: MotorEvent) void {
+        self.log.append(self.allocator, event) catch unreachable;
+    }
+
+    fn onPinChange(ctx: *anyopaque, e: Pin.Event) void {
+        const self: *MotorRunner = @ptrCast(@alignCast(ctx));
+        self.logEvent(.{ .timestamp = self.timestamp, .payload = .{ .pin = e } });
+    }
+
+    fn onStateChange(ctx: *anyopaque, e: EventPayload) void {
+        const self: *MotorRunner = @ptrCast(@alignCast(ctx));
+        self.state = e.state;
+        self.logEvent(.{ .timestamp = self.timestamp, .payload = .{ .state = e } });
+    }
+};
+
+test STSpin {
+    var runner: MotorRunner = .init(std.testing.allocator);
+    defer runner.deinit();
+
+    var step_pin = runner.pin(0);
+    var dir_pin = runner.pin(1);
+    var reset_pin = runner.pin(2);
+    var en_fault_pin = runner.pin(3);
+    var mode1_pin = runner.pin(4);
+    var mode2_pin = runner.pin(5);
+
+    var stepper: STSpin = .{ .config = .{
+        .step_pin = &step_pin,
+        .dir_pin = &dir_pin,
+        .reset_pin = &reset_pin,
+        .en_fault_pin = &en_fault_pin,
+        .mode1_pin = &mode1_pin,
+        .mode2_pin = &mode2_pin,
+    } };
+
+    runner.attach(&stepper);
+    try expectEqual(.INIT, stepper.state);
+
+    stepper.start(&runner.slot);
+    runner.advance();
+
+    try expectEqual(.IDLE, stepper.state);
+    runner.advance();
+    try expectEqual(.IDLE, stepper.state);
+
+    stepper.setSpeed(6000); // 60rpm
+    // stepper.setMicrostep(8);
+    stepper.rotate(4);
+    try expectEqual(4, stepper.steps_remaining);
+
+    runner.advanceToState(.IDLE, 100);
+
+    print("{any}\n", .{runner.slot});
+    print("{d}\n", .{stepper.steps_remaining});
+
+    for (runner.log.items) |item| {
+        print("{f}\n", .{item});
+    }
+
+    stepper.rotate(100);
 }

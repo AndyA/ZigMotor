@@ -1,6 +1,11 @@
 // Simple scheduler
 const std = @import("std");
-const microzig = @import("microzig");
+
+const microzig = if (@import("builtin").is_test)
+    @import("testing/microzig.zig")
+else
+    @import("microzig");
+
 const time = microzig.drivers.time;
 
 const assert = std.debug.assert;
