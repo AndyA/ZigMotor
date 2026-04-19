@@ -333,14 +333,14 @@ const MotorRunner = struct {
     const MotorEvent = struct {
         timestamp: Absolute,
         payload: union(enum) {
-            pin: Pin.Event,
+            pin: struct { name: []const u8, state: u1 },
             state: EventPayload,
         },
 
         pub fn format(self: MotorEvent, writer: *std.Io.Writer) std.Io.Writer.Error!void {
             try writer.print("[{d:>6}] ", .{self.timestamp.to_us()});
             switch (self.payload) {
-                .pin => |p| try writer.print("pin {d} = {d}", .{ p.target.id, p.state }),
+                .pin => |p| try writer.print("  pin {s} = {d}", .{ p.name, p.state }),
                 .state => |s| try writer.print("state {s}", .{@tagName(s.state)}),
             }
         }
@@ -350,6 +350,7 @@ const MotorRunner = struct {
     timestamp: Absolute = .from_us(0),
     slot: ScheduleSlot = .{},
     emitter: Pin.Emitter = .empty,
+    pins: std.ArrayList([]const u8) = .empty,
     log: std.ArrayList(MotorEvent) = .empty,
     state: State = .INIT,
 
@@ -358,6 +359,10 @@ const MotorRunner = struct {
     }
 
     pub fn deinit(self: *MotorRunner) void {
+        for (self.pins.items) |name| {
+            self.allocator.free(name);
+        }
+        self.pins.deinit(self.allocator);
         self.log.deinit(self.allocator);
     }
 
@@ -380,7 +385,10 @@ const MotorRunner = struct {
         assert(avail_steps > 0);
     }
 
-    pub fn pin(self: *MotorRunner, id: u8) Pin {
+    pub fn pin(self: *MotorRunner, name: []const u8) Pin {
+        const id: u8 = @intCast(self.pins.items.len);
+        const dupe = self.allocator.dupe(u8, name) catch unreachable;
+        self.pins.append(self.allocator, dupe) catch unreachable;
         return .{ .emitter = &self.emitter, .id = id };
     }
 
@@ -399,7 +407,10 @@ const MotorRunner = struct {
 
     fn onPinChange(ctx: *anyopaque, e: Pin.Event) void {
         const self: *MotorRunner = @ptrCast(@alignCast(ctx));
-        self.logEvent(.{ .timestamp = self.timestamp, .payload = .{ .pin = e } });
+        self.logEvent(.{ .timestamp = self.timestamp, .payload = .{ .pin = .{
+            .name = self.pins.items[e.target.id],
+            .state = e.state,
+        } } });
     }
 
     fn onStateChange(ctx: *anyopaque, e: EventPayload) void {
@@ -412,12 +423,12 @@ test STSpin {
     var runner: MotorRunner = .init(std.testing.allocator);
     defer runner.deinit();
 
-    var step_pin = runner.pin(0);
-    var dir_pin = runner.pin(1);
-    var reset_pin = runner.pin(2);
-    var en_fault_pin = runner.pin(3);
-    var mode1_pin = runner.pin(4);
-    var mode2_pin = runner.pin(5);
+    var step_pin = runner.pin("STEP");
+    var dir_pin = runner.pin("DIR");
+    var reset_pin = runner.pin("RESET");
+    var en_fault_pin = runner.pin("FAULT");
+    var mode1_pin = runner.pin("MODE1");
+    var mode2_pin = runner.pin("MODE2");
 
     var stepper: STSpin = .{ .config = .{
         .step_pin = &step_pin,
@@ -448,6 +459,10 @@ test STSpin {
     stepper.rotate(-4);
 
     runner.advanceToState(.IDLE, 100);
+
+    stepper.stop();
+
+    runner.advanceToState(.INIT, 100);
 
     // print("{any}\n", .{runner.slot});
     // print("{d}\n", .{stepper.steps_remaining});
