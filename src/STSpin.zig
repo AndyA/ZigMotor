@@ -189,7 +189,7 @@ fn notifyState(self: *Self, state: State) void {
     self.ee.emit(.{ .target = self, .state = state });
 }
 
-fn rtNotify(self: *Self) void {
+fn rtNotifyState(self: *Self) void {
     self.rt_ee.emit(.{ .target = self, .state = self.state });
 }
 
@@ -212,7 +212,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
                 self.notifyState(.MOVING);
                 // Emit a real-time event so that setSpeed can be called
                 // before we move.
-                self.rtNotify();
+                self.rtNotifyState();
                 continue :sm self.state;
             }
 
@@ -250,7 +250,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
             if (self.speed_rpm100 == 0) {
                 // Emit a real-time event so that setSpeed can be called
                 // to get us moving again.
-                self.rtNotify();
+                self.rtNotifyState();
                 // Loop while we wait for non-zero speed
                 slot.delay(IDLE_TIME);
             } else {
@@ -264,7 +264,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
 
             // Emit a real-time event so that setSpeed can be called
             // before we delay.
-            self.rtNotify();
+            self.rtNotifyState();
 
             self.state = .STEPPED;
             slot.delay(self.us_per_step - STEP_TIME);
