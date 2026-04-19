@@ -360,7 +360,10 @@ const MotorRunner = struct {
             try writer.print("[{d:>6}] ", .{self.timestamp.to_us()});
             switch (self.payload) {
                 .pin => |p| try writer.print("  pin {s:<6} = {d}", .{ p.name, p.state }),
-                .state => |s| try writer.print("state {s:<8} (rt={any})", .{ @tagName(s.state), s.rt }),
+                .state => |s| try writer.print("state {s:<8}{s}", .{
+                    @tagName(s.state),
+                    if (s.rt) " (RT)" else "",
+                }),
             }
         }
     };
