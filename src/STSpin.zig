@@ -345,7 +345,7 @@ const MotorRunner = struct {
         pub fn format(self: MotorEvent, writer: *std.Io.Writer) std.Io.Writer.Error!void {
             try writer.print("[{d:>6}] ", .{self.timestamp.to_us()});
             switch (self.payload) {
-                .pin => |p| try writer.print("  pin {s} = {d}", .{ p.name, p.state }),
+                .pin => |p| try writer.print("  pin {s:<6} = {d}", .{ p.name, p.state }),
                 .state => |s| try writer.print("state {s}", .{@tagName(s.state)}),
             }
         }
