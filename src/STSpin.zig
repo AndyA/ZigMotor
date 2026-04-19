@@ -15,7 +15,7 @@ const Self = @This();
 
 // During idling we wake up every 100µS to notice whether
 // we need to do anything
-pub const IDLE_TIME = 101; // µS
+pub const IDLE_TIME = 100; // µS
 
 // We assert STEP for up to 2µS. If we used 1µS we might
 // sometimes get a much shorter delay due to scheduler
