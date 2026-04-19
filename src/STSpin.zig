@@ -51,6 +51,7 @@ pub const State = enum(u8) {
 pub const EventPayload = struct {
     target: *Self,
     state: State,
+    rt: bool = false,
 };
 
 pub const Direction = enum(u2) {
@@ -190,7 +191,7 @@ fn notifyState(self: *Self, state: State) void {
 }
 
 fn rtNotify(self: *Self) void {
-    self.rt_ee.emit(.{ .target = self, .state = self.state });
+    self.rt_ee.emit(.{ .target = self, .state = self.state, .rt = true });
 }
 
 fn bitSet(bits: u4, pos: u2) u1 {
@@ -359,7 +360,7 @@ const MotorRunner = struct {
             try writer.print("[{d:>6}] ", .{self.timestamp.to_us()});
             switch (self.payload) {
                 .pin => |p| try writer.print("  pin {s:<6} = {d}", .{ p.name, p.state }),
-                .state => |s| try writer.print("state {s}", .{@tagName(s.state)}),
+                .state => |s| try writer.print("state {s} (rt={any})", .{ @tagName(s.state), s.rt }),
             }
         }
     };
@@ -377,9 +378,8 @@ const MotorRunner = struct {
     }
 
     pub fn deinit(self: *MotorRunner) void {
-        for (self.pins.items) |name| {
+        for (self.pins.items) |name|
             self.allocator.free(name);
-        }
         self.pins.deinit(self.allocator);
         self.log.deinit(self.allocator);
     }
@@ -412,6 +412,7 @@ const MotorRunner = struct {
 
     pub fn attach(self: *MotorRunner, stepper: *STSpin) void {
         stepper.ee.addListener(onStateChange, self);
+        stepper.rt_ee.addListener(onStateChange, self);
         self.emitter.addListener(onPinChange, self);
     }
 
