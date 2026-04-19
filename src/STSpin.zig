@@ -231,9 +231,6 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
             if (new_direction == self.direction)
                 continue :sm self.state; // all set, go and step
 
-            // Since we're changing direction we might need to speed ramp.
-            self.rtNotify();
-
             self.direction = new_direction;
 
             self.config.dir_pin.put(switch (new_direction) {
