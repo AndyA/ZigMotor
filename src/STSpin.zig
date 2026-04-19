@@ -15,13 +15,13 @@ const Self = @This();
 
 // During idling we wake up every 100µS to notice whether
 // we need to do anything
-pub const IDLE_TIME = 100; // µS
+pub const IDLE_TIME = 101; // µS
 
 // We assert STEP for up to 2µS. If we used 1µS we might
 // sometimes get a much shorter delay due to scheduler
 // granularity. We only actually need 100ns
 pub const STEP_TIME = 2; // µS
-pub const MODE_HOLD_TIME = 100; // µS
+pub const MODE_HOLD_TIME = 101; // µS
 
 pub const Config = struct {
     step_pin: *hal.gpio.Pin,
@@ -38,6 +38,7 @@ pub const State = enum(u8) {
     IDLE,
     STOPPING,
     STEP,
+    STEPPING,
     STEPPED,
     MOVING,
     MODE_SETUP,
@@ -91,6 +92,7 @@ rt_ee: events.Emitter(*Self, 2) = .empty,
 
 pub fn start(self: *Self, slot: *ScheduleSlot) void {
     assert(self.state == .INIT);
+    self.direction = .UNKNOWN;
     self.adviseState(.IDLE);
 
     const pins = .{
@@ -99,11 +101,8 @@ pub fn start(self: *Self, slot: *ScheduleSlot) void {
         self.config.reset_pin,
     };
 
-    inline for (pins) |maybe_pin| {
-        if (maybe_pin) |pin| {
-            pin.put(1);
-        }
-    }
+    inline for (pins) |maybe_pin|
+        if (maybe_pin) |pin| pin.put(1);
 
     slot.schedule(slot.now, stateMachine, self);
 }
@@ -205,7 +204,6 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
 
             slot.delay(IDLE_TIME);
         },
-
         .MOVING => {
             if (self.steps_remaining == 0) {
                 self.adviseState(.IDLE);
@@ -225,6 +223,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
                 .CCW => 0,
                 else => unreachable,
             });
+
             slot.delay(STEP_TIME); // allow dir to settle
         },
         .STEP => {
@@ -241,32 +240,30 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
                 slot.delay(IDLE_TIME);
             } else {
                 self.config.step_pin.put(1);
-                self.state = .STEPPED;
+                self.state = .STEPPING;
                 slot.delay(STEP_TIME);
             }
         },
-        .STEPPED => {
+        .STEPPING => {
             self.config.step_pin.put(0);
-
-            if (self.steps_remaining == 0) {
-                self.adviseState(.IDLE);
-                continue :sm self.state;
-            }
-
-            const delta: i32 = if (self.steps_remaining < 0) 1 else -1;
-            self.steps_remaining += delta;
-
-            if (self.steps_remaining == 0) {
-                self.adviseState(.IDLE);
-                continue :sm self.state;
-            }
 
             // Emit a real-time event so that setSpeed can be called
             // before we delay.
             self.rt_ee.emit(self);
 
-            self.state = .MOVING;
+            self.state = .STEPPED;
             slot.delay(self.us_per_step - STEP_TIME);
+        },
+        .STEPPED => {
+            const delta: i32 = if (self.steps_remaining < 0) 1 else -1;
+            self.steps_remaining += delta;
+
+            if (self.steps_remaining == 0)
+                self.adviseState(.IDLE)
+            else
+                self.state = .MOVING;
+
+            continue :sm self.state;
         },
         .MODE_SETUP => {
             const pending = self.microstep.pending;
@@ -313,9 +310,8 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
             slot.delay(MODE_HOLD_TIME);
         },
         .STOPPING => {
-            if (self.config.reset_pin) |reset_pin| {
+            if (self.config.reset_pin) |reset_pin|
                 reset_pin.put(0);
-            }
             self.adviseState(.INIT);
             // don't reschedule
         },
