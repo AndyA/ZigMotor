@@ -94,12 +94,12 @@ ee: events.Emitter(EventPayload, 5) = .empty,
 /// sense to have multiple parties fighting over control of the
 /// speed. Having two allows a handler to be hooked with `once` and
 /// be able to re-hook using `once` again from within the handler.
-rt_ee: events.Emitter(*Self, 2) = .empty,
+rt_ee: events.Emitter(EventPayload, 2) = .empty,
 
 pub fn start(self: *Self, slot: *ScheduleSlot) void {
     assert(self.state == .INIT);
     self.direction = .UNKNOWN;
-    self.adviseState(.IDLE);
+    self.notifyState(.IDLE);
 
     const pins = .{
         self.config.mode1_pin,
@@ -184,9 +184,13 @@ fn lookupMicrostep(microstep: u16) u4 {
     unreachable;
 }
 
-fn adviseState(self: *Self, state: State) void {
+fn notifyState(self: *Self, state: State) void {
     self.state = state;
     self.ee.emit(.{ .target = self, .state = state });
+}
+
+fn rtNotify(self: *Self) void {
+    self.rt_ee.emit(.{ .target = self, .state = self.state });
 }
 
 fn bitSet(bits: u4, pos: u2) u1 {
@@ -205,10 +209,10 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
             }
 
             if (self.steps_remaining != 0) {
-                self.adviseState(.MOVING);
+                self.notifyState(.MOVING);
                 // Emit a real-time event so that setSpeed can be called
                 // before we move.
-                self.rt_ee.emit(self);
+                self.rtNotify();
                 continue :sm self.state;
             }
 
@@ -217,7 +221,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
 
         .MOVING => {
             if (self.steps_remaining == 0) {
-                self.adviseState(.IDLE);
+                self.notifyState(.IDLE);
                 continue :sm self.state;
             }
 
@@ -239,14 +243,14 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
         },
         .STEP => {
             if (self.steps_remaining == 0) {
-                self.adviseState(.IDLE);
+                self.notifyState(.IDLE);
                 continue :sm self.state;
             }
 
             if (self.speed_rpm100 == 0) {
                 // Emit a real-time event so that setSpeed can be called
                 // to get us moving again.
-                self.rt_ee.emit(self);
+                self.rtNotify();
                 // Loop while we wait for non-zero speed
                 slot.delay(IDLE_TIME);
             } else {
@@ -260,7 +264,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
 
             // Emit a real-time event so that setSpeed can be called
             // before we delay.
-            self.rt_ee.emit(self);
+            self.rtNotify();
 
             self.state = .STEPPED;
             slot.delay(self.us_per_step - STEP_TIME);
@@ -275,7 +279,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
             self.phase = @intCast((@as(i32, self.phase) + phase_delta) & 0xff);
 
             if (self.steps_remaining == 0)
-                self.adviseState(.IDLE)
+                self.notifyState(.IDLE)
             else
                 self.state = .MOVING;
 
@@ -330,7 +334,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
         .STOPPING => {
             if (self.config.reset_pin) |reset_pin|
                 reset_pin.put(0);
-            self.adviseState(.INIT);
+            self.notifyState(.INIT);
             // don't reschedule
         },
     }
