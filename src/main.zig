@@ -47,15 +47,15 @@ pub fn main() !void {
     const pins = pin_config.apply();
     var scheduler: Scheduler = .empty;
 
-    var blinker = Blinker.init_us(pins.led, 250_000);
+    var blinker = Blinker.init_us(pins.led, 329_134);
     blinker.schedule(scheduler.pri(0));
     var led1 = Blinker.init_us(pins.led1, 125_000);
     led1.schedule(scheduler.pri(1));
-    var led2 = Blinker.init_us(pins.led2, 126_000);
+    var led2 = Blinker.init_us(pins.led2, 125_100);
     led2.schedule(scheduler.pri(2));
-    var led3 = Blinker.init_us(pins.led3, 127_000);
+    var led3 = Blinker.init_us(pins.led3, 125_200);
     led3.schedule(scheduler.pri(3));
-    var led4 = Blinker.init_us(pins.led4, 128_000);
+    var led4 = Blinker.init_us(pins.led4, 125_300);
     led4.schedule(scheduler.pri(4));
 
     while (true) {

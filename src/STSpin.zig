@@ -467,9 +467,9 @@ test STSpin {
 
     runner.advanceToState(.IDLE, 100);
 
-    stepper.setMicrostep(8);
-
     try expectEqual(32, stepper.phase);
+
+    stepper.setMicrostep(8);
 
     stepper.rotate(-4);
 
