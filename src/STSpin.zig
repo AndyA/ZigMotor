@@ -77,6 +77,9 @@ steps_remaining: i32 = 0,
 /// Current per-step interval
 us_per_step: u32 = 0,
 
+/// Current microstep phase
+phase: u8 = 0,
+
 /// Event emitter - gets notifications of significant state changes:
 ///   .INIT <=> .IDLE
 ///   .IDLE <=> .MOVING
@@ -112,6 +115,7 @@ pub fn stop(self: *Self) void {
         self.state = .STOPPING;
         self.speed_rpm100 = 0;
         self.steps_remaining = 0;
+        self.phase = 0;
     }
 }
 
@@ -255,8 +259,13 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
             slot.delay(self.us_per_step - STEP_TIME);
         },
         .STEPPED => {
-            const delta: i32 = if (self.steps_remaining < 0) 1 else -1;
-            self.steps_remaining += delta;
+            const delta: i32 = if (self.steps_remaining > 0) 1 else -1;
+            self.steps_remaining -= delta;
+
+            // Track microstep phase in 1/256th of a step
+            const step_size: u16 = @divTrunc(256, self.microstep.active);
+            const phase_delta: i32 = delta * step_size;
+            self.phase = @intCast((@as(i32, self.phase) + phase_delta) & 0xff);
 
             if (self.steps_remaining == 0)
                 self.adviseState(.IDLE)
@@ -452,9 +461,16 @@ test STSpin {
 
     runner.advanceToState(.IDLE, 100);
 
+    stepper.setMicrostep(8);
+
+    try expectEqual(32, stepper.phase);
+
     stepper.rotate(-4);
 
     runner.advanceToState(.IDLE, 100);
+    runner.advanceToState(.IDLE, 100);
+
+    // try expectEqual(224, stepper.phase);
 
     stepper.stop();
 
