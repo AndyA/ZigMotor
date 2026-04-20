@@ -104,15 +104,14 @@ pub fn init(config: Config) Self {
 pub fn start(self: *Self, slot: *ScheduleSlot) !void {
     assert(self.state == .INIT);
     self.direction = .UNKNOWN;
-    try self.notifyState(.IDLE);
 
     try self.config.dir_pin.set_direction(.output);
     try self.config.dir_pin.write(.low);
     try self.config.step_pin.set_direction(.output);
     try self.config.step_pin.write(.low);
 
-    if (self.config.en_fault_pin) |maybe_pin| {
-        try maybe_pin.set_direction(.input);
+    if (self.config.en_fault_pin) |fault_pin| {
+        try fault_pin.set_direction(.input);
     }
 
     const pins = .{
@@ -129,6 +128,7 @@ pub fn start(self: *Self, slot: *ScheduleSlot) !void {
     }
 
     slot.schedule(slot.now, stateMachine, self);
+    try self.notifyState(.IDLE);
 }
 
 pub fn stop(self: *Self) void {

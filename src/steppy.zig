@@ -8,8 +8,9 @@ const GPIO_Device = hal.drivers.GPIO_Device;
 const sched = @import("runtime/scheduler.zig");
 const events = @import("runtime/events.zig");
 
+const Blinker = @import("drivers/Blinker.zig");
+const Alert = @import("drivers/Alert.zig");
 const STSpin = @import("drivers/STSpin.zig");
-const Scheduler = sched.makeScheduler(5);
 
 const Sequencer = struct {
     const Self = @This();
@@ -23,6 +24,7 @@ const Sequencer = struct {
     steps: [MaxSteps]Step = undefined,
     used: u16 = 0,
     current: u16 = 0,
+    alert: ?*Alert = null,
 
     pub const empty: Self = .{};
 
@@ -41,6 +43,8 @@ const Sequencer = struct {
         switch (e.state) {
             .IDLE => {
                 if (self.used == 0) return;
+                if (self.alert) |alert|
+                    try alert.activate();
                 const step = self.steps[self.current];
                 e.target.setSpeed(step.speed);
                 e.target.rotate(step.steps);
@@ -53,23 +57,61 @@ const Sequencer = struct {
     }
 };
 
+const Scheduler = sched.makeScheduler(8);
+
 pub fn main() !void {
     var scheduler: Scheduler = .empty;
 
     var pins: struct {
-        step: GPIO_Device,
+        blue1: GPIO_Device,
+        blue2: GPIO_Device,
+        red1: GPIO_Device,
+        red2: GPIO_Device,
+
         dir: GPIO_Device,
+        step: GPIO_Device,
         mode1: GPIO_Device,
         mode2: GPIO_Device,
         fault: GPIO_Device,
         reset: GPIO_Device,
+
+        led: GPIO_Device,
     } = undefined;
 
-    inline for (std.meta.fields(@TypeOf(pins)), .{ 20, 21, 19, 18, 17, 16 }) |field, num| {
+    const gpio_numbers = .{
+        12, // blue 1
+        13, // blue 2
+        14, // red 1
+        15, // red 2
+
+        21, // dir
+        20, // step
+        19, // mode 1
+        18, // mode 2
+        17, // fault
+        16, // reset
+
+        25, // board led
+    };
+
+    inline for (std.meta.fields(@TypeOf(pins)), gpio_numbers) |field, num| {
         const pin = hal.gpio.num(num);
         pin.set_function(.sio);
         @field(pins, field.name) = GPIO_Device.init(pin);
     }
+
+    var led = try Blinker.init_us(pins.led.digital_io(), 125_000);
+    led.schedule(scheduler.pri(-1));
+
+    var blue1 = try Alert.init(pins.blue1.digital_io());
+    blue1.schedule(scheduler.pri(-2));
+    var blue2 = try Alert.init(pins.blue2.digital_io());
+    blue2.schedule(scheduler.pri(-3));
+
+    var red1 = try Alert.init(pins.red1.digital_io());
+    red1.schedule(scheduler.pri(-4));
+    var red2 = try Alert.init(pins.red2.digital_io());
+    red2.schedule(scheduler.pri(-5));
 
     var stepper: STSpin = .init(.{
         .step_pin = pins.step.digital_io(),
@@ -81,12 +123,17 @@ pub fn main() !void {
     });
 
     const steps = &[_]Sequencer.Step{
-        .{ .speed = 1500, .steps = 50 * 16 },
-        .{ .speed = 500, .steps = -100 * 16 },
-        .{ .speed = 1000, .steps = 50 * 16 },
+        .{ .speed = 4000, .steps = 300 * 16 },
+        .{ .speed = 6000, .steps = -600 * 16 },
+        .{ .speed = 5000, .steps = 300 * 16 },
     };
 
-    var sequencer: Sequencer = .empty;
+    try blue1.activate();
+    // try blue2.activate();
+    // try red1.activate();
+    // try red2.activate();
+
+    var sequencer: Sequencer = .{ .alert = &red2 };
     sequencer.addSteps(steps);
     sequencer.attach(&stepper);
 

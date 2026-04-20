@@ -22,7 +22,7 @@ pub fn main() !void {
         led4: GPIO_Device,
     } = undefined;
 
-    inline for (std.meta.fields(@TypeOf(pins)), .{ 25, 14, 15, 16, 17 }) |field, num| {
+    inline for (std.meta.fields(@TypeOf(pins)), .{ 25, 12, 13, 14, 15 }) |field, num| {
         const pin = hal.gpio.num(num);
         pin.set_function(.sio);
         @field(pins, field.name) = GPIO_Device.init(pin);
