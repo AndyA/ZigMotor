@@ -147,5 +147,6 @@ pub fn main() !void {
 test {
     _ = @import("runtime/scheduler.zig");
     _ = @import("runtime/events.zig");
+    _ = @import("runtime/ticker.zig");
     _ = @import("drivers/STSpin.zig");
 }
