@@ -1,28 +1,25 @@
+const std = @import("std");
 const microzig = @import("microzig");
 const hal = microzig.hal;
 const time = microzig.drivers.time;
+const GPIO_Device = hal.drivers.GPIO_Device;
+const Digital_IO = microzig.drivers.base.Digital_IO;
 
 const sched = @import("scheduler.zig");
 const events = @import("events.zig");
 
 const STSpin = @import("STSpin.zig");
 
-// Compile-time pin configuration
-const pin_config = hal.pins.GlobalConfiguration{
-    .GPIO14 = .{ .name = "led1", .direction = .out },
-    .GPIO15 = .{ .name = "led2", .direction = .out },
-    .GPIO16 = .{ .name = "led3", .direction = .out },
-    .GPIO17 = .{ .name = "led4", .direction = .out },
-    .GPIO25 = .{ .name = "led", .direction = .out },
-};
-
 const Blinker = struct {
     const Self = @This();
 
-    pin: hal.gpio.Pin,
+    pin: Digital_IO,
     delay: time.Duration,
 
-    pub fn init_us(pin: hal.gpio.Pin, delay_us: u64) Self {
+    state: Digital_IO.State = .low,
+
+    pub fn init_us(pin: Digital_IO, delay_us: u64) !Self {
+        try pin.set_direction(.output);
         return Self{
             .pin = pin,
             .delay = time.Duration.from_us(delay_us),
@@ -36,7 +33,8 @@ const Blinker = struct {
 
     fn task(ctx: *anyopaque, slot: *sched.ScheduleSlot) !void {
         const self: *Self = @ptrCast(@alignCast(ctx));
-        self.pin.toggle();
+        self.state = self.state.invert();
+        try self.pin.write(self.state);
         self.schedule(slot);
     }
 };
@@ -44,18 +42,31 @@ const Blinker = struct {
 const Scheduler = sched.makeScheduler(5);
 
 pub fn main() !void {
-    const pins = pin_config.apply();
     var scheduler: Scheduler = .empty;
 
-    var blinker = Blinker.init_us(pins.led, 329_134);
-    blinker.schedule(scheduler.pri(0));
-    var led1 = Blinker.init_us(pins.led1, 125_000);
+    var pins: struct {
+        led: GPIO_Device,
+        led1: GPIO_Device,
+        led2: GPIO_Device,
+        led3: GPIO_Device,
+        led4: GPIO_Device,
+    } = undefined;
+
+    inline for (std.meta.fields(@TypeOf(pins)), .{ 25, 14, 15, 16, 17 }) |field, num| {
+        const pin = hal.gpio.num(num);
+        pin.set_function(.sio);
+        @field(pins, field.name) = GPIO_Device.init(pin);
+    }
+
+    var led = try Blinker.init_us(pins.led.digital_io(), 329_134);
+    led.schedule(scheduler.pri(0));
+    var led1 = try Blinker.init_us(pins.led1.digital_io(), 125_000);
     led1.schedule(scheduler.pri(1));
-    var led2 = Blinker.init_us(pins.led2, 125_010);
+    var led2 = try Blinker.init_us(pins.led2.digital_io(), 125_010);
     led2.schedule(scheduler.pri(2));
-    var led3 = Blinker.init_us(pins.led3, 125_030);
+    var led3 = try Blinker.init_us(pins.led3.digital_io(), 125_030);
     led3.schedule(scheduler.pri(3));
-    var led4 = Blinker.init_us(pins.led4, 125_050);
+    var led4 = try Blinker.init_us(pins.led4.digital_io(), 125_050);
     led4.schedule(scheduler.pri(4));
 
     while (true) {
