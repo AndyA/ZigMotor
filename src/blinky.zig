@@ -5,39 +5,9 @@ const time = microzig.drivers.time;
 const GPIO_Device = hal.drivers.GPIO_Device;
 const Digital_IO = microzig.drivers.base.Digital_IO;
 
-const sched = @import("scheduler.zig");
-const events = @import("events.zig");
-
-const STSpin = @import("STSpin.zig");
-
-const Blinker = struct {
-    const Self = @This();
-
-    pin: Digital_IO,
-    delay: time.Duration,
-
-    state: Digital_IO.State = .low,
-
-    pub fn init_us(pin: Digital_IO, delay_us: u64) !Self {
-        try pin.set_direction(.output);
-        return Self{
-            .pin = pin,
-            .delay = time.Duration.from_us(delay_us),
-        };
-    }
-
-    pub fn schedule(self: *Self, slot: *sched.ScheduleSlot) void {
-        const deadline = slot.now.add_duration(self.delay);
-        slot.schedule(deadline, task, self);
-    }
-
-    fn task(ctx: *anyopaque, slot: *sched.ScheduleSlot) !void {
-        const self: *Self = @ptrCast(@alignCast(ctx));
-        self.state = self.state.invert();
-        try self.pin.write(self.state);
-        self.schedule(slot);
-    }
-};
+const sched = @import("runtime/scheduler.zig");
+const events = @import("runtime/events.zig");
+const Blinker = @import("drivers/Blinker.zig");
 
 const Scheduler = sched.makeScheduler(5);
 
@@ -72,10 +42,4 @@ pub fn main() !void {
     while (true) {
         _ = try scheduler.poll(hal.time.get_time_since_boot());
     }
-}
-
-test {
-    _ = @import("scheduler.zig");
-    _ = @import("events.zig");
-    _ = @import("STSpin.zig");
 }

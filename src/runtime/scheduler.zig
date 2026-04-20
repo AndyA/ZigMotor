@@ -2,7 +2,7 @@
 const std = @import("std");
 
 const microzig = if (@import("builtin").is_test)
-    @import("testing/microzig.zig")
+    @import("../testing/microzig.zig")
 else
     @import("microzig");
 

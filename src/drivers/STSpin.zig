@@ -2,15 +2,15 @@ const std = @import("std");
 const assert = std.debug.assert;
 
 const microzig = if (@import("builtin").is_test)
-    @import("testing/microzig.zig")
+    @import("../testing/microzig.zig")
 else
     @import("microzig");
 
 const hal = microzig.hal;
 const Digital_IO = microzig.drivers.base.Digital_IO;
 
-const ScheduleSlot = @import("scheduler.zig").ScheduleSlot;
-const events = @import("events.zig");
+const ScheduleSlot = @import("../runtime/scheduler.zig").ScheduleSlot;
+const events = @import("../runtime/events.zig");
 
 const Self = @This();
 

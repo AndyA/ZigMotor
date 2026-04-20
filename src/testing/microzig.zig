@@ -1,7 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
-const events = @import("../events.zig");
+const events = @import("../runtime/events.zig");
 
 pub const drivers = struct {
     pub const base = struct {

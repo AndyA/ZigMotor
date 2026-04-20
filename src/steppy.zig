@@ -5,10 +5,10 @@ const microzig = @import("microzig");
 const hal = microzig.hal;
 const GPIO_Device = hal.drivers.GPIO_Device;
 
-const sched = @import("scheduler.zig");
-const events = @import("events.zig");
+const sched = @import("runtime/scheduler.zig");
+const events = @import("runtime/events.zig");
 
-const STSpin = @import("STSpin.zig");
+const STSpin = @import("drivers/STSpin.zig");
 const Scheduler = sched.makeScheduler(5);
 
 const Sequencer = struct {
@@ -98,7 +98,7 @@ pub fn main() !void {
 }
 
 test {
-    _ = @import("scheduler.zig");
-    _ = @import("events.zig");
-    _ = @import("STSpin.zig");
+    _ = @import("runtime/scheduler.zig");
+    _ = @import("runtime/events.zig");
+    _ = @import("drivers/STSpin.zig");
 }
