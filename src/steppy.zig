@@ -123,9 +123,9 @@ pub fn main() !void {
     });
 
     const steps = &[_]Sequencer.Step{
-        .{ .speed = 400000, .steps = 3000 * 16 },
-        .{ .speed = 600000, .steps = -6000 * 16 },
-        .{ .speed = 500000, .steps = 3000 * 16 },
+        .{ .speed = 80000, .steps = 3000 * 16 },
+        .{ .speed = 120000, .steps = -6000 * 16 },
+        .{ .speed = 100000, .steps = 3000 * 16 },
     };
 
     try blue1.activate();
