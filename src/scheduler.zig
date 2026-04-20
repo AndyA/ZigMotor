@@ -10,7 +10,7 @@ const time = microzig.drivers.time;
 
 const assert = std.debug.assert;
 
-pub const TaskHandler = fn (ctx: *anyopaque, slot: *ScheduleSlot) void;
+pub const TaskHandler = fn (ctx: *anyopaque, slot: *ScheduleSlot) anyerror!void;
 pub const Now = time.Absolute.from_us(0);
 pub const Never = time.Absolute.from_us(std.math.maxInt(u64));
 
@@ -40,27 +40,17 @@ pub const ScheduleSlot = struct {
         self.deadline = self.now.add_duration(time.Duration.from_us(delay_us));
     }
 
-    pub fn poll(self: *Self, now: time.Absolute) bool {
+    pub fn poll(self: *Self, now: time.Absolute) !bool {
         if (self.deadline.is_reached_by(now)) {
             self.now = now;
             self.deadline = Never;
-            self.handler(self.context, self);
+            try self.handler(self.context, self);
             return true;
         }
 
         return false;
     }
 };
-
-// test ScheduleSlot {
-//     const Task = struct {
-//         pub fn task(ctx: *anyopaque, slot: *ScheduleSlot) void {
-//             _ = ctx;
-//             slot.delay(10);
-//         }
-//     };
-//     var slot: ScheduleSlot = .{};
-// }
 
 pub fn makeScheduler(comptime size: u8) type {
     return struct {
@@ -69,9 +59,9 @@ pub fn makeScheduler(comptime size: u8) type {
 
         slots: [size]ScheduleSlot = @splat(.{}),
 
-        pub fn poll(self: *Self, now: time.Absolute) bool {
+        pub fn poll(self: *Self, now: time.Absolute) !bool {
             for (&self.slots) |*slot| {
-                if (slot.poll(now)) return true;
+                if (try slot.poll(now)) return true;
             }
             return false;
         }

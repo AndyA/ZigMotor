@@ -59,15 +59,15 @@ pub const drivers = struct {
                     .name = self.name,
                     .driver = self.driver.*,
                     .reason = reason,
-                });
+                }) catch unreachable;
             }
 
-            pub fn write(self: Self, state: State) void {
+            pub fn write(self: Self, state: State) !void {
                 self.driver.state = state;
                 self.emit(.WRITE);
             }
 
-            pub fn set_direction(self: Self, direction: Direction) void {
+            pub fn set_direction(self: Self, direction: Direction) !void {
                 self.driver.direction = direction;
                 self.emit(.SET_DIRECTION);
             }

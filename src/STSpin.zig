@@ -97,18 +97,22 @@ ee: events.Emitter(EventPayload, 5) = .empty,
 /// be able to re-hook using `once` again from within the handler.
 rt_ee: events.Emitter(EventPayload, 2) = .empty,
 
-pub fn start(self: *Self, slot: *ScheduleSlot) void {
+pub fn init(config: Config) Self {
+    return .{ .config = config };
+}
+
+pub fn start(self: *Self, slot: *ScheduleSlot) !void {
     assert(self.state == .INIT);
     self.direction = .UNKNOWN;
-    self.notifyState(.IDLE);
+    try self.notifyState(.IDLE);
 
-    self.config.dir_pin.set_direction(.output);
-    self.config.dir_pin.write(.low);
-    self.config.step_pin.set_direction(.output);
-    self.config.step_pin.write(.low);
+    try self.config.dir_pin.set_direction(.output);
+    try self.config.dir_pin.write(.low);
+    try self.config.step_pin.set_direction(.output);
+    try self.config.step_pin.write(.low);
 
     if (self.config.en_fault_pin) |maybe_pin| {
-        maybe_pin.set_direction(.input);
+        try maybe_pin.set_direction(.input);
     }
 
     const pins = .{
@@ -119,8 +123,8 @@ pub fn start(self: *Self, slot: *ScheduleSlot) void {
 
     inline for (pins) |maybe_pin| {
         if (maybe_pin) |pin| {
-            pin.set_direction(.output);
-            pin.write(.high);
+            try pin.set_direction(.output);
+            try pin.write(.high);
         }
     }
 
@@ -155,8 +159,8 @@ pub fn setSpeed(self: *Self, rpm100: u32) void {
     self.speed_rpm100 = rpm100;
 }
 
-pub fn setMicrostep(self: *Self, microstep: u16) void {
-    _ = lookupMicrostep(microstep); // unreachable if bad
+pub fn setMicrostep(self: *Self, microstep: u16) !void {
+    _ = try lookupMicrostep(microstep); // unreachable if bad
     self.microstep.pending = microstep;
 }
 
@@ -179,7 +183,7 @@ pub fn setMicrostep(self: *Self, microstep: u16) void {
 //  0  1  0  0 Full-step - 1/128nd step (1)
 //  1  1  0  0 Full-step - 1/256th step (1)
 
-fn lookupMicrostep(microstep: u16) u4 {
+fn lookupMicrostep(microstep: u16) error{BadMicrostep}!u4 {
     const table = [_]struct { ms: u16, bits: u4 }{
         .{ .ms = 1, .bits = 0b0000 },
         .{ .ms = 2, .bits = 0b0101 },
@@ -195,23 +199,24 @@ fn lookupMicrostep(microstep: u16) u4 {
         if (ent.ms == microstep)
             return ent.bits;
     }
-    unreachable;
+
+    return error.BadMicrostep;
 }
 
-fn notifyState(self: *Self, state: State) void {
+fn notifyState(self: *Self, state: State) !void {
     self.state = state;
-    self.ee.emit(.{ .target = self, .state = state });
+    try self.ee.emit(.{ .target = self, .state = state });
 }
 
-fn rtNotify(self: *Self) void {
-    self.rt_ee.emit(.{ .target = self, .state = self.state });
+fn rtNotify(self: *Self) !void {
+    try self.rt_ee.emit(.{ .target = self, .state = self.state });
 }
 
 fn bitSet(bits: u4, pos: u2) Digital_IO.State {
     return if ((bits & (@as(u4, 1) << pos)) != 0) .high else .low;
 }
 
-fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
+fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
     const self: *Self = @ptrCast(@alignCast(ctx));
 
     sm: switch (self.state) {
@@ -223,10 +228,10 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
             }
 
             if (self.steps_remaining != 0) {
-                self.notifyState(.MOVING);
+                try self.notifyState(.MOVING);
                 // Emit a real-time event so that setSpeed can be called
                 // before we move.
-                self.rtNotify();
+                try self.rtNotify();
                 continue :sm self.state;
             }
 
@@ -235,7 +240,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
 
         .MOVING => {
             if (self.steps_remaining == 0) {
-                self.notifyState(.IDLE);
+                try self.notifyState(.IDLE);
                 continue :sm self.state;
             }
 
@@ -247,7 +252,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
 
             self.direction = new_direction;
 
-            self.config.dir_pin.write(switch (new_direction) {
+            try self.config.dir_pin.write(switch (new_direction) {
                 .CW => .high,
                 .CCW => .low,
                 else => unreachable,
@@ -257,28 +262,28 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
         },
         .STEP => {
             if (self.steps_remaining == 0) {
-                self.notifyState(.IDLE);
+                try self.notifyState(.IDLE);
                 continue :sm self.state;
             }
 
             if (self.speed_rpm100 == 0) {
                 // Emit a real-time event so that setSpeed can be called
                 // to get us moving again.
-                self.rtNotify();
+                try self.rtNotify();
                 // Loop while we wait for non-zero speed
                 slot.delay(IDLE_TIME);
             } else {
-                self.config.step_pin.write(.high);
+                try self.config.step_pin.write(.high);
                 self.state = .STEPPING;
                 slot.delay(STEP_TIME);
             }
         },
         .STEPPING => {
-            self.config.step_pin.write(.low);
+            try self.config.step_pin.write(.low);
 
             // Emit a real-time event so that setSpeed can be called
             // before we delay.
-            self.rtNotify();
+            try self.rtNotify();
 
             self.state = .STEPPED;
             slot.delay(self.us_per_step - STEP_TIME);
@@ -293,7 +298,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
             self.phase = @intCast((@as(i32, self.phase) + phase_delta) & 0xff);
 
             if (self.steps_remaining == 0)
-                self.notifyState(.IDLE)
+                try self.notifyState(.IDLE)
             else
                 self.state = .MOVING;
 
@@ -306,11 +311,11 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
             if (pending == 1 or pending == self.microstep.current) {
                 // just diddle the mode bits and wait a bit
                 if (pending == 1) {
-                    self.config.mode1_pin.?.write(.low);
-                    self.config.mode2_pin.?.write(.low);
+                    try self.config.mode1_pin.?.write(.low);
+                    try self.config.mode2_pin.?.write(.low);
                 } else {
-                    self.config.mode1_pin.?.write(.high);
-                    self.config.mode2_pin.?.write(.high);
+                    try self.config.mode1_pin.?.write(.high);
+                    try self.config.mode2_pin.?.write(.high);
                 }
 
                 self.microstep.active = pending;
@@ -322,12 +327,12 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
                 // set mode bits
                 // wait 1µS
                 // go to .MODE_HOLD
-                self.config.reset_pin.?.write(.low);
-                const bits = lookupMicrostep(pending);
-                self.config.mode1_pin.?.write(bitSet(bits, 0));
-                self.config.mode2_pin.?.write(bitSet(bits, 1));
-                self.config.step_pin.write(bitSet(bits, 2));
-                self.config.dir_pin.write(bitSet(bits, 3));
+                try self.config.reset_pin.?.write(.low);
+                const bits = try lookupMicrostep(pending);
+                try self.config.mode1_pin.?.write(bitSet(bits, 0));
+                try self.config.mode2_pin.?.write(bitSet(bits, 1));
+                try self.config.step_pin.write(bitSet(bits, 2));
+                try self.config.dir_pin.write(bitSet(bits, 3));
 
                 self.microstep.active = pending;
                 self.microstep.current = pending;
@@ -345,14 +350,14 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
             // wait 100µS
             // go to .IDLE
             self.state = .IDLE; // don't advise
-            self.config.reset_pin.?.write(.high);
+            try self.config.reset_pin.?.write(.high);
             slot.delay(MODE_HOLD_TIME);
         },
 
         .STOPPING => {
             if (self.config.reset_pin) |reset_pin|
-                reset_pin.write(.low);
-            self.notifyState(.INIT);
+                try reset_pin.write(.low);
+            try self.notifyState(.INIT);
             // don't reschedule
         },
     }
@@ -414,28 +419,28 @@ const MotorRunner = struct {
         self.log.deinit(self.allocator);
     }
 
-    pub fn advance(self: *MotorRunner) void {
+    pub fn advance(self: *MotorRunner) !void {
         self.timestamp = self.slot.deadline;
-        _ = self.slot.poll(self.timestamp);
+        _ = try self.slot.poll(self.timestamp);
         const stepper: *STSpin = @ptrCast(@alignCast(self.slot.context));
         self.state = stepper.state;
     }
 
-    pub fn advanceToState(self: *MotorRunner, state: State, max_steps: u32) void {
+    pub fn advanceToState(self: *MotorRunner, state: State, max_steps: u32) !void {
         var avail_steps = max_steps;
 
         while (avail_steps > 0 and self.state == state) : (avail_steps -= 1)
-            self.advance();
+            try self.advance();
 
         while (avail_steps > 0 and self.state != state) : (avail_steps -= 1)
-            self.advance();
+            try self.advance();
 
         assert(avail_steps > 0);
     }
 
-    pub fn pin(self: *MotorRunner, name: []const u8) Digital_IO {
-        const io = Digital_IO.init(self.allocator, name, &self.emitter) catch unreachable;
-        self.pins.append(self.allocator, io) catch unreachable;
+    pub fn pin(self: *MotorRunner, name: []const u8) !Digital_IO {
+        const io = try Digital_IO.init(self.allocator, name, &self.emitter);
+        try self.pins.append(self.allocator, io);
         return io;
     }
 
@@ -449,23 +454,23 @@ const MotorRunner = struct {
         self.log.items.len = 0;
     }
 
-    fn logEvent(self: *MotorRunner, event: MotorEvent) void {
-        self.log.append(self.allocator, event) catch unreachable;
+    fn logEvent(self: *MotorRunner, event: MotorEvent) !void {
+        try self.log.append(self.allocator, event);
     }
 
-    fn onPinChange(ctx: *anyopaque, e: Digital_IO.Event) void {
+    fn onPinChange(ctx: *anyopaque, e: Digital_IO.Event) !void {
         const self: *MotorRunner = @ptrCast(@alignCast(ctx));
-        self.logEvent(.{ .timestamp = self.timestamp, .payload = .{ .dio = e } });
+        try self.logEvent(.{ .timestamp = self.timestamp, .payload = .{ .dio = e } });
     }
 
-    fn onStateChange(ctx: *anyopaque, e: EventPayload) void {
+    fn onStateChange(ctx: *anyopaque, e: EventPayload) !void {
         const self: *MotorRunner = @ptrCast(@alignCast(ctx));
-        self.logEvent(.{ .timestamp = self.timestamp, .payload = .{ .state = e } });
+        try self.logEvent(.{ .timestamp = self.timestamp, .payload = .{ .state = e } });
     }
 
-    fn onRTStateChange(ctx: *anyopaque, e: EventPayload) void {
+    fn onRTStateChange(ctx: *anyopaque, e: EventPayload) !void {
         const self: *MotorRunner = @ptrCast(@alignCast(ctx));
-        self.logEvent(.{ .timestamp = self.timestamp, .payload = .{ .rt_state = e } });
+        try self.logEvent(.{ .timestamp = self.timestamp, .payload = .{ .rt_state = e } });
     }
 };
 
@@ -473,23 +478,23 @@ test STSpin {
     var runner: MotorRunner = .init(std.testing.allocator);
     defer runner.deinit();
 
-    var stepper: STSpin = .{ .config = .{
-        .step_pin = runner.pin("STEP"),
-        .dir_pin = runner.pin("DIR"),
-        .reset_pin = runner.pin("RESET"),
-        .en_fault_pin = runner.pin("FAULT"),
-        .mode1_pin = runner.pin("MODE1"),
-        .mode2_pin = runner.pin("MODE2"),
-    } };
+    var stepper: STSpin = .init(.{
+        .step_pin = try runner.pin("STEP"),
+        .dir_pin = try runner.pin("DIR"),
+        .reset_pin = try runner.pin("RESET"),
+        .en_fault_pin = try runner.pin("FAULT"),
+        .mode1_pin = try runner.pin("MODE1"),
+        .mode2_pin = try runner.pin("MODE2"),
+    });
 
     runner.attach(&stepper);
     try expectEqual(.INIT, stepper.state);
 
-    stepper.start(&runner.slot);
-    runner.advance();
+    try stepper.start(&runner.slot);
+    try runner.advance();
 
     try expectEqual(.IDLE, stepper.state);
-    runner.advance();
+    try runner.advance();
     try expectEqual(.IDLE, stepper.state);
 
     stepper.setSpeed(6000); // 60rpm
@@ -497,22 +502,22 @@ test STSpin {
     // stepper.setMicrostep(8);
     stepper.rotate(2);
 
-    runner.advanceToState(.IDLE, 100);
+    try runner.advanceToState(.IDLE, 100);
 
     try expectEqual(32, stepper.phase);
 
-    stepper.setMicrostep(8);
+    try stepper.setMicrostep(8);
 
     stepper.rotate(-4);
 
-    runner.advanceToState(.IDLE, 100);
-    runner.advanceToState(.IDLE, 100);
+    try runner.advanceToState(.IDLE, 100);
+    try runner.advanceToState(.IDLE, 100);
 
     // try expectEqual(224, stepper.phase);
 
     stepper.stop();
 
-    runner.advanceToState(.INIT, 100);
+    try runner.advanceToState(.INIT, 100);
 
     // print("{any}\n", .{runner.slot});
     // print("{d}\n", .{stepper.steps_remaining});

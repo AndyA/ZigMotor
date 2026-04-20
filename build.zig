@@ -12,29 +12,29 @@ pub fn build(b: *std.Build) void {
     const mz_dep = b.dependency("microzig", .{});
     const mb = MicroBuild.init(b, mz_dep) orelse return;
 
-    const firmware = mb.add_firmware(.{
+    const blinky = mb.add_firmware(.{
         .name = "blinky",
         .target = mb.ports.rp2xxx.boards.raspberrypi.pico,
         .optimize = .ReleaseSmall,
-        .root_source_file = b.path("src/main.zig"),
+        .root_source_file = b.path("src/blinky.zig"),
     });
 
-    mb.install_firmware(firmware, .{});
+    mb.install_firmware(blinky, .{});
 
-    // const mz_test_dep = b.dependency("microzig", .{
-    //     .target = target,
-    //     .optimize = optimize,
-    // });
+    const steppy = mb.add_firmware(.{
+        .name = "steppy",
+        .target = mb.ports.rp2xxx.boards.raspberrypi.pico,
+        .optimize = .ReleaseSmall,
+        .root_source_file = b.path("src/steppy.zig"),
+    });
+
+    mb.install_firmware(steppy, .{});
 
     const unit_tests = b.addTest(.{
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/main.zig"),
+            .root_source_file = b.path("src/steppy.zig"),
             .target = target,
             .optimize = optimize,
-            // .imports = &.{.{
-            //     .name = "microzig",
-            //     .module = mz_test_dep.module("microzig"),
-            // }},
         }),
     });
 

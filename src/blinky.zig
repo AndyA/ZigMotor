@@ -34,7 +34,7 @@ const Blinker = struct {
         slot.schedule(deadline, task, self);
     }
 
-    fn task(ctx: *anyopaque, slot: *sched.ScheduleSlot) void {
+    fn task(ctx: *anyopaque, slot: *sched.ScheduleSlot) !void {
         const self: *Self = @ptrCast(@alignCast(ctx));
         self.pin.toggle();
         self.schedule(slot);
@@ -59,7 +59,7 @@ pub fn main() !void {
     led4.schedule(scheduler.pri(4));
 
     while (true) {
-        _ = scheduler.poll(hal.time.get_time_since_boot());
+        _ = try scheduler.poll(hal.time.get_time_since_boot());
     }
 }
 
