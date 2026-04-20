@@ -533,4 +533,12 @@ test STSpin {
         };
 
     stepper.rotate(100);
+
+    if (true) {
+        var speed: u32 = 1;
+        while (speed < 5_000_000) : (speed *= 2) {
+            stepper.setSpeed(speed);
+            print("speed: {d:>8}, µS/step: {d:>8}\n", .{ speed, stepper.us_per_step });
+        }
+    }
 }
