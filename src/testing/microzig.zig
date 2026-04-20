@@ -1,27 +1,78 @@
+const std = @import("std");
+const Allocator = std.mem.Allocator;
+
 const events = @import("../events.zig");
 
-pub const hal = struct {
-    pub const gpio = struct {
-        pub const Pin = struct {
-            pub const Event = struct {
-                target: *Pin,
-                state: u1,
+pub const drivers = struct {
+    pub const base = struct {
+        pub const Digital_IO = struct {
+            const Self = @This();
+
+            pub const State = enum(u1) {
+                low = 0,
+                high = 1,
+
+                pub fn invert(state: State) State {
+                    return @as(State, @enumFromInt(~@intFromEnum(state)));
+                }
+
+                pub fn value(state: State) u1 {
+                    return @intFromEnum(state);
+                }
             };
+
+            pub const Direction = enum { input, output };
+
+            const Driver = struct {
+                state: State = .low,
+                direction: Direction = .input,
+            };
+
+            pub const Event = struct {
+                const Reason = enum { WRITE, SET_DIRECTION };
+                name: []const u8,
+                driver: Driver,
+                reason: Reason,
+            };
+
             pub const Emitter = events.Emitter(Event, 2);
 
+            name: []const u8,
             emitter: *Emitter,
-            id: u8,
-            state: u1 = 0,
+            driver: *Driver,
 
-            pub fn put(self: *Pin, state: u1) void {
-                self.state = state;
-                self.emitter.emit(.{ .target = self, .state = state });
+            pub fn init(allocator: Allocator, name: []const u8, emitter: *Emitter) !Self {
+                return .{
+                    .name = try allocator.dupe(u8, name),
+                    .emitter = emitter,
+                    .driver = try allocator.create(Driver),
+                };
+            }
+
+            pub fn deinit(self: Self, allocator: Allocator) void {
+                allocator.free(self.name);
+                allocator.destroy(self.driver);
+            }
+
+            fn emit(self: Self, reason: Event.Reason) void {
+                self.emitter.emit(.{
+                    .name = self.name,
+                    .driver = self.driver.*,
+                    .reason = reason,
+                });
+            }
+
+            pub fn write(self: Self, state: State) void {
+                self.driver.state = state;
+                self.emit(.WRITE);
+            }
+
+            pub fn set_direction(self: Self, direction: Direction) void {
+                self.driver.direction = direction;
+                self.emit(.SET_DIRECTION);
             }
         };
     };
-};
-
-pub const drivers = struct {
     pub const time = struct {
         // Lifted from microzig source
         pub const Absolute = enum(u64) {

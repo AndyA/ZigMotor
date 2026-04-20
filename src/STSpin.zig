@@ -7,6 +7,7 @@ else
     @import("microzig");
 
 const hal = microzig.hal;
+const Digital_IO = microzig.drivers.base.Digital_IO;
 
 const ScheduleSlot = @import("scheduler.zig").ScheduleSlot;
 const events = @import("events.zig");
@@ -24,13 +25,13 @@ pub const STEP_TIME = 2; // µS
 pub const MODE_HOLD_TIME = 101; // µS
 
 pub const Config = struct {
-    step_pin: *hal.gpio.Pin,
-    dir_pin: *hal.gpio.Pin,
+    step_pin: Digital_IO,
+    dir_pin: Digital_IO,
     steps_per_revolution: u16 = 200,
-    mode1_pin: ?*hal.gpio.Pin = null,
-    mode2_pin: ?*hal.gpio.Pin = null,
-    en_fault_pin: ?*hal.gpio.Pin = null,
-    reset_pin: ?*hal.gpio.Pin = null,
+    mode1_pin: ?Digital_IO = null,
+    mode2_pin: ?Digital_IO = null,
+    en_fault_pin: ?Digital_IO = null,
+    reset_pin: ?Digital_IO = null,
 };
 
 pub const State = enum(u8) {
@@ -102,14 +103,27 @@ pub fn start(self: *Self, slot: *ScheduleSlot) void {
     self.direction = .UNKNOWN;
     self.notifyState(.IDLE);
 
+    self.config.dir_pin.set_direction(.output);
+    self.config.dir_pin.write(.low);
+    self.config.step_pin.set_direction(.output);
+    self.config.step_pin.write(.low);
+
+    if (self.config.en_fault_pin) |maybe_pin| {
+        maybe_pin.set_direction(.input);
+    }
+
     const pins = .{
+        self.config.reset_pin,
         self.config.mode1_pin,
         self.config.mode2_pin,
-        self.config.reset_pin,
     };
 
-    inline for (pins) |maybe_pin|
-        if (maybe_pin) |pin| pin.put(1);
+    inline for (pins) |maybe_pin| {
+        if (maybe_pin) |pin| {
+            pin.set_direction(.output);
+            pin.write(.high);
+        }
+    }
 
     slot.schedule(slot.now, stateMachine, self);
 }
@@ -194,8 +208,8 @@ fn rtNotify(self: *Self) void {
     self.rt_ee.emit(.{ .target = self, .state = self.state, .rt = true });
 }
 
-fn bitSet(bits: u4, pos: u2) u1 {
-    return if ((bits & (@as(u4, 1) << pos)) != 0) 1 else 0;
+fn bitSet(bits: u4, pos: u2) Digital_IO.State {
+    return if ((bits & (@as(u4, 1) << pos)) != 0) .high else .low;
 }
 
 fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
@@ -234,9 +248,9 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
 
             self.direction = new_direction;
 
-            self.config.dir_pin.put(switch (new_direction) {
-                .CW => 1,
-                .CCW => 0,
+            self.config.dir_pin.write(switch (new_direction) {
+                .CW => .high,
+                .CCW => .low,
                 else => unreachable,
             });
 
@@ -255,13 +269,13 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
                 // Loop while we wait for non-zero speed
                 slot.delay(IDLE_TIME);
             } else {
-                self.config.step_pin.put(1);
+                self.config.step_pin.write(.high);
                 self.state = .STEPPING;
                 slot.delay(STEP_TIME);
             }
         },
         .STEPPING => {
-            self.config.step_pin.put(0);
+            self.config.step_pin.write(.low);
 
             // Emit a real-time event so that setSpeed can be called
             // before we delay.
@@ -292,9 +306,13 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
             assert(pending != self.microstep.active);
             if (pending == 1 or pending == self.microstep.current) {
                 // just diddle the mode bits and wait a bit
-                const bit: u1 = if (pending == 1) 0 else 1;
-                self.config.mode1_pin.?.put(bit);
-                self.config.mode2_pin.?.put(bit);
+                if (pending == 1) {
+                    self.config.mode1_pin.?.write(.low);
+                    self.config.mode2_pin.?.write(.low);
+                } else {
+                    self.config.mode1_pin.?.write(.high);
+                    self.config.mode2_pin.?.write(.high);
+                }
 
                 self.microstep.active = pending;
 
@@ -305,12 +323,12 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
                 // set mode bits
                 // wait 1µS
                 // go to .MODE_HOLD
-                self.config.reset_pin.?.put(0);
+                self.config.reset_pin.?.write(.low);
                 const bits = lookupMicrostep(pending);
-                self.config.mode1_pin.?.put(bitSet(bits, 0));
-                self.config.mode2_pin.?.put(bitSet(bits, 1));
-                self.config.step_pin.put(bitSet(bits, 2));
-                self.config.dir_pin.put(bitSet(bits, 3));
+                self.config.mode1_pin.?.write(bitSet(bits, 0));
+                self.config.mode2_pin.?.write(bitSet(bits, 1));
+                self.config.step_pin.write(bitSet(bits, 2));
+                self.config.dir_pin.write(bitSet(bits, 3));
 
                 self.microstep.active = pending;
                 self.microstep.current = pending;
@@ -328,38 +346,49 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) void {
             // wait 100µS
             // go to .IDLE
             self.state = .IDLE; // don't advise
-            self.config.reset_pin.?.put(1);
+            self.config.reset_pin.?.write(.high);
             slot.delay(MODE_HOLD_TIME);
         },
 
         .STOPPING => {
             if (self.config.reset_pin) |reset_pin|
-                reset_pin.put(0);
+                reset_pin.write(.low);
             self.notifyState(.INIT);
             // don't reschedule
         },
     }
 }
 
-const STSpin = Self;
-const Pin = hal.gpio.Pin;
-const Absolute = microzig.drivers.time.Absolute;
 const expectEqual = std.testing.expectEqual;
+const Io = std.Io;
 const print = std.debug.print;
 const Allocator = std.mem.Allocator;
+
+const Absolute = microzig.drivers.time.Absolute;
+
+const STSpin = Self;
 
 const MotorRunner = struct {
     const MotorEvent = struct {
         timestamp: Absolute,
         payload: union(enum) {
-            pin: struct { name: []const u8, state: u1 },
+            dio: Digital_IO.Event,
             state: EventPayload,
         },
 
-        pub fn format(self: MotorEvent, w: *std.Io.Writer) std.Io.Writer.Error!void {
+        pub fn format(self: MotorEvent, w: *Io.Writer) Io.Writer.Error!void {
             try w.print("[{d:>6}] ", .{self.timestamp.to_us()});
             switch (self.payload) {
-                .pin => |p| try w.print("  pin {s:<6} = {d}", .{ p.name, p.state }),
+                .dio => |dio| switch (dio.reason) {
+                    .WRITE => try w.print("  pin {s:<6} write {s}", .{
+                        dio.name,
+                        @tagName(dio.driver.state),
+                    }),
+                    .SET_DIRECTION => try w.print("  pin {s:<6} set_direction {s}", .{
+                        dio.name,
+                        @tagName(dio.driver.direction),
+                    }),
+                },
                 .state => |s| try w.print("state {s}{s}", .{
                     if (s.rt) "RT " else "",
                     @tagName(s.state),
@@ -371,8 +400,8 @@ const MotorRunner = struct {
     allocator: Allocator,
     timestamp: Absolute = .from_us(0),
     slot: ScheduleSlot = .{},
-    emitter: Pin.Emitter = .empty,
-    pins: std.ArrayList([]const u8) = .empty,
+    emitter: Digital_IO.Emitter = .empty,
+    pins: std.ArrayList(Digital_IO) = .empty,
     log: std.ArrayList(MotorEvent) = .empty,
     state: State = .INIT,
 
@@ -381,8 +410,8 @@ const MotorRunner = struct {
     }
 
     pub fn deinit(self: *MotorRunner) void {
-        for (self.pins.items) |name|
-            self.allocator.free(name);
+        for (self.pins.items) |p|
+            p.deinit(self.allocator);
         self.pins.deinit(self.allocator);
         self.log.deinit(self.allocator);
     }
@@ -406,11 +435,10 @@ const MotorRunner = struct {
         assert(avail_steps > 0);
     }
 
-    pub fn pin(self: *MotorRunner, name: []const u8) Pin {
-        const id: u8 = @intCast(self.pins.items.len);
-        const dupe = self.allocator.dupe(u8, name) catch unreachable;
-        self.pins.append(self.allocator, dupe) catch unreachable;
-        return .{ .emitter = &self.emitter, .id = id };
+    pub fn pin(self: *MotorRunner, name: []const u8) Digital_IO {
+        const io = Digital_IO.init(self.allocator, name, &self.emitter) catch unreachable;
+        self.pins.append(self.allocator, io) catch unreachable;
+        return io;
     }
 
     pub fn attach(self: *MotorRunner, stepper: *STSpin) void {
@@ -427,12 +455,9 @@ const MotorRunner = struct {
         self.log.append(self.allocator, event) catch unreachable;
     }
 
-    fn onPinChange(ctx: *anyopaque, e: Pin.Event) void {
+    fn onPinChange(ctx: *anyopaque, e: Digital_IO.Event) void {
         const self: *MotorRunner = @ptrCast(@alignCast(ctx));
-        self.logEvent(.{ .timestamp = self.timestamp, .payload = .{ .pin = .{
-            .name = self.pins.items[e.target.id],
-            .state = e.state,
-        } } });
+        self.logEvent(.{ .timestamp = self.timestamp, .payload = .{ .dio = e } });
     }
 
     fn onStateChange(ctx: *anyopaque, e: EventPayload) void {
@@ -445,20 +470,13 @@ test STSpin {
     var runner: MotorRunner = .init(std.testing.allocator);
     defer runner.deinit();
 
-    var step_pin = runner.pin("STEP");
-    var dir_pin = runner.pin("DIR");
-    var reset_pin = runner.pin("RESET");
-    var en_fault_pin = runner.pin("FAULT");
-    var mode1_pin = runner.pin("MODE1");
-    var mode2_pin = runner.pin("MODE2");
-
     var stepper: STSpin = .{ .config = .{
-        .step_pin = &step_pin,
-        .dir_pin = &dir_pin,
-        .reset_pin = &reset_pin,
-        .en_fault_pin = &en_fault_pin,
-        .mode1_pin = &mode1_pin,
-        .mode2_pin = &mode2_pin,
+        .step_pin = runner.pin("STEP"),
+        .dir_pin = runner.pin("DIR"),
+        .reset_pin = runner.pin("RESET"),
+        .en_fault_pin = runner.pin("FAULT"),
+        .mode1_pin = runner.pin("MODE1"),
+        .mode2_pin = runner.pin("MODE2"),
     } };
 
     runner.attach(&stepper);
