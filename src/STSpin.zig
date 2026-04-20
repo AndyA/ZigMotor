@@ -52,7 +52,6 @@ pub const State = enum(u8) {
 pub const EventPayload = struct {
     target: *Self,
     state: State,
-    rt: bool = false,
 };
 
 pub const Direction = enum(u2) {
@@ -205,7 +204,7 @@ fn notifyState(self: *Self, state: State) void {
 }
 
 fn rtNotify(self: *Self) void {
-    self.rt_ee.emit(.{ .target = self, .state = self.state, .rt = true });
+    self.rt_ee.emit(.{ .target = self, .state = self.state });
 }
 
 fn bitSet(bits: u4, pos: u2) Digital_IO.State {
@@ -374,6 +373,7 @@ const MotorRunner = struct {
         payload: union(enum) {
             dio: Digital_IO.Event,
             state: EventPayload,
+            rt_state: EventPayload,
         },
 
         pub fn format(self: MotorEvent, w: *Io.Writer) Io.Writer.Error!void {
@@ -389,10 +389,8 @@ const MotorRunner = struct {
                         @tagName(dio.driver.direction),
                     }),
                 },
-                .state => |s| try w.print("state {s}{s}", .{
-                    if (s.rt) "RT " else "",
-                    @tagName(s.state),
-                }),
+                .state => |s| try w.print("state {s}", .{@tagName(s.state)}),
+                .rt_state => |s| try w.print("rt state {s}", .{@tagName(s.state)}),
             }
         }
     };
@@ -443,7 +441,7 @@ const MotorRunner = struct {
 
     pub fn attach(self: *MotorRunner, stepper: *STSpin) void {
         stepper.ee.addListener(onStateChange, self);
-        stepper.rt_ee.addListener(onStateChange, self);
+        stepper.rt_ee.addListener(onRTStateChange, self);
         self.emitter.addListener(onPinChange, self);
     }
 
@@ -463,6 +461,11 @@ const MotorRunner = struct {
     fn onStateChange(ctx: *anyopaque, e: EventPayload) void {
         const self: *MotorRunner = @ptrCast(@alignCast(ctx));
         self.logEvent(.{ .timestamp = self.timestamp, .payload = .{ .state = e } });
+    }
+
+    fn onRTStateChange(ctx: *anyopaque, e: EventPayload) void {
+        const self: *MotorRunner = @ptrCast(@alignCast(ctx));
+        self.logEvent(.{ .timestamp = self.timestamp, .payload = .{ .rt_state = e } });
     }
 };
 
