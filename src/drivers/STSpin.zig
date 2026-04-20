@@ -87,7 +87,7 @@ phase: u8 = 0,
 /// Event emitter - gets notifications of significant state changes:
 ///   .INIT <=> .IDLE
 ///   .IDLE <=> .MOVING
-ee: events.Emitter(EventPayload, 5) = .empty,
+state_ee: events.Emitter(EventPayload, 5) = .empty,
 
 /// Realtime event emitter - called after every step before the delay
 /// to the next step is calculated. Event handlers can usefully vary
@@ -112,6 +112,7 @@ pub fn start(self: *Self, slot: *ScheduleSlot) !void {
 
     if (self.config.en_fault_pin) |fault_pin| {
         try fault_pin.set_direction(.input);
+        try fault_pin.set_bias(.high);
     }
 
     const pins = .{
@@ -205,7 +206,7 @@ fn lookupMicrostep(microstep: u16) error{BadMicrostep}!u4 {
 
 fn notifyState(self: *Self, state: State) !void {
     self.state = state;
-    try self.ee.emit(.{ .target = self, .state = state });
+    try self.state_ee.emit(.{ .target = self, .state = state });
 }
 
 fn rtNotify(self: *Self) !void {
@@ -393,6 +394,10 @@ const MotorRunner = struct {
                         dio.name,
                         @tagName(dio.driver.direction),
                     }),
+                    .SET_BIAS => try w.print("  pin {s:<6} set_bias {s}", .{
+                        dio.name,
+                        if (dio.driver.bias) |bias| @tagName(bias) else "none",
+                    }),
                 },
                 .state => |s| try w.print("state {s}", .{@tagName(s.state)}),
                 .rt_state => |s| try w.print("rt state {s}", .{@tagName(s.state)}),
@@ -445,7 +450,7 @@ const MotorRunner = struct {
     }
 
     pub fn attach(self: *MotorRunner, stepper: *STSpin) void {
-        stepper.ee.addListener(onStateChange, self);
+        stepper.state_ee.addListener(onStateChange, self);
         stepper.rt_ee.addListener(onRTStateChange, self);
         self.emitter.addListener(onPinChange, self);
     }

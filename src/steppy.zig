@@ -29,7 +29,7 @@ const Sequencer = struct {
     pub const empty: Self = .{};
 
     pub fn attach(self: *Self, stepper: *STSpin) void {
-        stepper.ee.addListener(onStateChange, self);
+        stepper.state_ee.addListener(onStateChange, self);
     }
 
     pub fn addSteps(self: *Self, steps: []const Step) void {

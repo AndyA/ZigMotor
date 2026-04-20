@@ -26,10 +26,11 @@ pub const drivers = struct {
             const Driver = struct {
                 state: State = .low,
                 direction: Direction = .input,
+                bias: ?State = null,
             };
 
             pub const Event = struct {
-                const Reason = enum { WRITE, SET_DIRECTION };
+                const Reason = enum { WRITE, SET_DIRECTION, SET_BIAS };
                 name: []const u8,
                 driver: Driver,
                 reason: Reason,
@@ -70,6 +71,11 @@ pub const drivers = struct {
             pub fn set_direction(self: Self, direction: Direction) !void {
                 self.driver.direction = direction;
                 self.emit(.SET_DIRECTION);
+            }
+
+            pub fn set_bias(self: Self, bias: ?State) !void {
+                self.driver.bias = bias;
+                self.emit(.SET_BIAS);
             }
         };
     };
