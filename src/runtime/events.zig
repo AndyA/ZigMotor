@@ -4,8 +4,26 @@ const expectEqual = std.testing.expectEqual;
 
 pub fn Emitter(comptime PayloadType: type, comptime size: u8) type {
     return struct {
+        const is_void = @sizeOf(PayloadType) == 0;
         const Self = @This();
-        pub const HandlerType = fn (ctx: *anyopaque, payload: PayloadType) anyerror!void;
+
+        pub const HandlerType = if (is_void)
+            fn (ctx: *anyopaque) anyerror!void
+        else
+            fn (ctx: *anyopaque, payload: PayloadType) anyerror!void;
+
+        const shim = if (is_void)
+            struct {
+                pub fn emit(self: *Self) !void {
+                    try self.emitPayload({});
+                }
+            }
+        else
+            struct {
+                pub fn emit(self: *Self, payload: PayloadType) !void {
+                    try self.emitPayload(payload);
+                }
+            };
 
         const SlotType = struct {
             handler: *const HandlerType,
@@ -20,7 +38,9 @@ pub fn Emitter(comptime PayloadType: type, comptime size: u8) type {
 
         pub const empty: Self = .{};
 
-        pub fn emit(self: *Self, payload: PayloadType) !void {
+        pub const emit = shim.emit;
+
+        fn emitPayload(self: *Self, payload: PayloadType) !void {
             assert(self.hot == 0);
             self.hot = self.used;
             defer {
@@ -42,7 +62,10 @@ pub fn Emitter(comptime PayloadType: type, comptime size: u8) type {
             }
 
             for (self.slots[0..self.hot]) |slot| {
-                try slot.handler(slot.context, payload);
+                if (is_void)
+                    try slot.handler(slot.context)
+                else
+                    try slot.handler(slot.context, payload);
             }
         }
 
@@ -120,21 +143,21 @@ test Emitter {
     const EventTarget = struct {
         const Self = @This();
 
-        seenOnEvent: usize = 0,
-        seenMore: usize = 0,
-        seenOnOnce: usize = 0,
-        seenOnMortal: usize = 0,
+        seen_on_event: usize = 0,
+        seen_more: usize = 0,
+        seen_on_once: usize = 0,
+        seen_on_mortal: usize = 0,
 
         pub fn onEvent(ctx: *anyopaque, payload: Payload) !void {
             const self: *Self = @ptrCast(@alignCast(ctx));
-            self.seenOnEvent += 1;
+            self.seen_on_event += 1;
             if (payload.more)
-                self.seenMore += 1;
+                self.seen_more += 1;
         }
 
         pub fn onOnce(ctx: *anyopaque, payload: Payload) !void {
             const self: *Self = @ptrCast(@alignCast(ctx));
-            self.seenOnOnce += 1;
+            self.seen_on_once += 1;
 
             if (payload.more)
                 payload.ee.once(onOnce, self);
@@ -142,7 +165,7 @@ test Emitter {
 
         pub fn onMortal(ctx: *anyopaque, payload: Payload) !void {
             const self: *Self = @ptrCast(@alignCast(ctx));
-            self.seenOnMortal += 1;
+            self.seen_on_mortal += 1;
 
             if (!payload.more)
                 payload.ee.removeListener(onMortal, self);
@@ -156,52 +179,52 @@ test Emitter {
     var t1: EventTarget = .{};
 
     ee.addListener(EventTarget.onEvent, &t1);
-    try expectEqual(0, t1.seenOnEvent);
-    try expectEqual(0, t1.seenMore);
+    try expectEqual(0, t1.seen_on_event);
+    try expectEqual(0, t1.seen_more);
     try ee.emit(.{ .ee = &ee });
-    try expectEqual(1, t1.seenOnEvent);
-    try expectEqual(0, t1.seenMore);
+    try expectEqual(1, t1.seen_on_event);
+    try expectEqual(0, t1.seen_more);
 
     var t2: EventTarget = .{};
 
     ee.addListener(EventTarget.onEvent, &t2);
     try ee.emit(.{ .ee = &ee, .more = true });
-    try expectEqual(2, t1.seenOnEvent);
-    try expectEqual(1, t1.seenMore);
-    try expectEqual(1, t2.seenOnEvent);
-    try expectEqual(1, t2.seenMore);
+    try expectEqual(2, t1.seen_on_event);
+    try expectEqual(1, t1.seen_more);
+    try expectEqual(1, t2.seen_on_event);
+    try expectEqual(1, t2.seen_more);
 
     ee.removeListener(EventTarget.onEvent, &t1);
     try ee.emit(.{ .ee = &ee, .more = true });
-    try expectEqual(2, t1.seenOnEvent);
-    try expectEqual(1, t1.seenMore);
-    try expectEqual(2, t2.seenOnEvent);
-    try expectEqual(2, t2.seenMore);
+    try expectEqual(2, t1.seen_on_event);
+    try expectEqual(1, t1.seen_more);
+    try expectEqual(2, t2.seen_on_event);
+    try expectEqual(2, t2.seen_more);
 
     ee.once(EventTarget.onOnce, &t1);
-    try expectEqual(0, t1.seenOnOnce);
+    try expectEqual(0, t1.seen_on_once);
     try ee.emit(.{ .ee = &ee });
-    try expectEqual(1, t1.seenOnOnce);
+    try expectEqual(1, t1.seen_on_once);
     try ee.emit(.{ .ee = &ee });
-    try expectEqual(1, t1.seenOnOnce);
+    try expectEqual(1, t1.seen_on_once);
 
     ee.once(EventTarget.onOnce, &t1);
-    try expectEqual(1, t1.seenOnOnce);
+    try expectEqual(1, t1.seen_on_once);
     try ee.emit(.{ .ee = &ee, .more = true });
-    try expectEqual(2, t1.seenOnOnce);
+    try expectEqual(2, t1.seen_on_once);
     try ee.emit(.{ .ee = &ee });
-    try expectEqual(3, t1.seenOnOnce);
+    try expectEqual(3, t1.seen_on_once);
     try ee.emit(.{ .ee = &ee, .more = true });
-    try expectEqual(3, t1.seenOnOnce);
+    try expectEqual(3, t1.seen_on_once);
 
     ee.addListener(EventTarget.onMortal, &t1);
-    try expectEqual(0, t1.seenOnMortal);
+    try expectEqual(0, t1.seen_on_mortal);
     try ee.emit(.{ .ee = &ee, .more = true });
-    try expectEqual(1, t1.seenOnMortal);
+    try expectEqual(1, t1.seen_on_mortal);
     try ee.emit(.{ .ee = &ee });
-    try expectEqual(2, t1.seenOnMortal);
+    try expectEqual(2, t1.seen_on_mortal);
     try ee.emit(.{ .ee = &ee });
-    try expectEqual(2, t1.seenOnMortal);
+    try expectEqual(2, t1.seen_on_mortal);
 
     try expectEqual(1, ee.used);
 
@@ -210,35 +233,55 @@ test Emitter {
 
     try expectEqual(3, ee.used);
     try ee.emit(.{ .ee = &ee, .more = true });
-    try expectEqual(3, t1.seenOnEvent);
-    try expectEqual(3, t1.seenOnMortal);
-    try expectEqual(11, t2.seenOnEvent);
+    try expectEqual(3, t1.seen_on_event);
+    try expectEqual(3, t1.seen_on_mortal);
+    try expectEqual(11, t2.seen_on_event);
 
     ee.removeAll(&t1);
 
     try expectEqual(1, ee.used);
     try ee.emit(.{ .ee = &ee, .more = true });
-    try expectEqual(3, t1.seenOnEvent);
-    try expectEqual(3, t1.seenOnMortal);
-    try expectEqual(12, t2.seenOnEvent);
+    try expectEqual(3, t1.seen_on_event);
+    try expectEqual(3, t1.seen_on_mortal);
+    try expectEqual(12, t2.seen_on_event);
 
     ee.addListener(EventTarget.onEvent, &t1);
     ee.addListener(EventTarget.onMortal, &t1);
 
     try ee.emit(.{ .ee = &ee, .more = true });
-    try expectEqual(4, t1.seenOnEvent);
-    try expectEqual(4, t1.seenOnMortal);
-    try expectEqual(13, t2.seenOnEvent);
+    try expectEqual(4, t1.seen_on_event);
+    try expectEqual(4, t1.seen_on_mortal);
+    try expectEqual(13, t2.seen_on_event);
 
     try ee.emit(.{ .ee = &ee, .more = true, .stop_all = true });
-    try expectEqual(5, t1.seenOnEvent);
-    try expectEqual(5, t1.seenOnMortal);
-    try expectEqual(14, t2.seenOnEvent);
+    try expectEqual(5, t1.seen_on_event);
+    try expectEqual(5, t1.seen_on_mortal);
+    try expectEqual(14, t2.seen_on_event);
 
     try expectEqual(1, ee.used);
 
     try ee.emit(.{ .ee = &ee, .more = true });
-    try expectEqual(5, t1.seenOnEvent);
-    try expectEqual(5, t1.seenOnMortal);
-    try expectEqual(15, t2.seenOnEvent);
+    try expectEqual(5, t1.seen_on_event);
+    try expectEqual(5, t1.seen_on_mortal);
+    try expectEqual(15, t2.seen_on_event);
+}
+
+test "Emitter with void PayloadType" {
+    const EventTarget = struct {
+        const Self = @This();
+
+        seen_on_event: usize = 0,
+
+        pub fn onEvent(ctx: *anyopaque) !void {
+            const self: *Self = @ptrCast(@alignCast(ctx));
+            self.seen_on_event += 1;
+        }
+    };
+
+    var ee: Emitter(void, 5) = .empty;
+    var t1: EventTarget = .{};
+
+    ee.addListener(EventTarget.onEvent, &t1);
+    try ee.emit();
+    try expectEqual(1, t1.seen_on_event);
 }
