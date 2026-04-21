@@ -174,6 +174,7 @@ pub fn stepsPerRevolution(self: Self) u32 {
 
 // Set the speed in RPM
 pub fn setSpeed(self: *Self, rpm: f32) void {
+    assert(rpm >= 0);
     if (self.speed == rpm) return;
     if (rpm != 0) {
         const spm: f32 = @as(f32, @floatFromInt(self.stepsPerRevolution())) * rpm;
