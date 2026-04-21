@@ -63,6 +63,7 @@ pub const StepperController = struct {
             self.set_point = set_point;
             if (self.state == .STOPPED) {
                 try self.adviseState(.MOVING);
+                self.last_tick = .from_us(0);
                 self.tick(self.last_tick);
             }
         }
