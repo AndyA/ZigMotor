@@ -172,18 +172,16 @@ pub fn stepsPerRevolution(self: Self) u32 {
     return self.config.steps_per_revolution * self.microstep.active;
 }
 
-// Set the speed in hundredths of an RPM
-pub fn setSpeed(self: *Self, speed: f32) void {
-    if (self.speed == speed) return;
-    if (speed != 0) {
-        // steps / minute
-        const spm: f32 = @as(f32, @floatFromInt(self.stepsPerRevolution())) * speed;
-        // steps / µS
+// Set the speed in RPM
+pub fn setSpeed(self: *Self, rpm: f32) void {
+    if (self.speed == rpm) return;
+    if (rpm != 0) {
+        const spm: f32 = @as(f32, @floatFromInt(self.stepsPerRevolution())) * rpm;
         self.us_per_step = @intFromFloat(@max(@as(f32, STEP_TIME), 1_000_000 * 60 / spm));
     } else {
         self.us_per_step = 0; // means disabled
     }
-    self.speed = speed;
+    self.speed = rpm;
 }
 
 pub fn setMicrostep(self: *Self, microstep: u16) !void {
