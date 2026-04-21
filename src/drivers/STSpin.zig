@@ -7,6 +7,8 @@ else
     @import("microzig");
 
 const hal = microzig.hal;
+const time = microzig.drivers.time;
+
 const Digital_IO = microzig.drivers.base.Digital_IO;
 
 const ScheduleSlot = @import("../runtime/scheduler.zig").ScheduleSlot;
@@ -54,10 +56,24 @@ pub const EventPayload = struct {
     state: State,
 };
 
+pub const RTEventPayload = struct {
+    target: *Self,
+    state: State,
+    now: time.Absolute,
+};
+
 pub const Direction = enum(u2) {
     CW,
     CCW,
     UNKNOWN, // at startup
+
+    pub fn step(self: Direction) i2 {
+        return switch (self) {
+            .CW => 1,
+            .CCW => -1,
+            .UNKNOWN => 0,
+        };
+    }
 };
 
 config: Config,
@@ -78,6 +94,9 @@ speed_rpm100: u32 = 0,
 /// Number of steps still to perform
 steps_remaining: i32 = 0,
 
+/// The current position of the motor
+current_position: i64 = 0,
+
 /// Current per-step interval
 us_per_step: u32 = 0,
 
@@ -95,7 +114,7 @@ state_ee: events.Emitter(EventPayload, 5) = .empty,
 /// sense to have multiple parties fighting over control of the
 /// speed. Having two allows a handler to be hooked with `once` and
 /// be able to re-hook using `once` again from within the handler.
-rt_ee: events.Emitter(EventPayload, 2) = .empty,
+rt_ee: events.Emitter(RTEventPayload, 2) = .empty,
 
 pub fn init(config: Config) Self {
     return .{ .config = config };
@@ -151,6 +170,7 @@ pub fn stepsPerRevolution(self: Self) u32 {
 
 // Set the speed in hundredths of an RPM
 pub fn setSpeed(self: *Self, rpm100: u32) void {
+    if (self.speed_rpm100 == rpm100) return;
     if (rpm100 != 0) {
         const spr = self.stepsPerRevolution();
         const max_rpm100 = std.math.maxInt(u32) / spr;
@@ -209,8 +229,12 @@ fn notifyState(self: *Self, state: State) !void {
     try self.state_ee.emit(.{ .target = self, .state = state });
 }
 
-fn rtNotify(self: *Self) !void {
-    try self.rt_ee.emit(.{ .target = self, .state = self.state });
+fn rtNotify(self: *Self, now: time.Absolute) !void {
+    try self.rt_ee.emit(.{
+        .target = self,
+        .state = self.state,
+        .now = now,
+    });
 }
 
 fn bitSet(bits: u4, pos: u2) Digital_IO.State {
@@ -230,9 +254,6 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
 
             if (self.steps_remaining != 0) {
                 try self.notifyState(.MOVING);
-                // Emit a real-time event so that setSpeed can be called
-                // before we move.
-                try self.rtNotify();
                 continue :sm self.state;
             }
 
@@ -267,10 +288,10 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
                 continue :sm self.state;
             }
 
+            // RT notify so speed can be set before step starts
+            try self.rtNotify(slot.now);
+
             if (self.speed_rpm100 == 0) {
-                // Emit a real-time event so that setSpeed can be called
-                // to get us moving again.
-                try self.rtNotify();
                 // Loop while we wait for non-zero speed
                 slot.delay(IDLE_TIME);
             } else {
@@ -282,16 +303,13 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
         .STEPPING => {
             try self.config.step_pin.write(.low);
 
-            // Emit a real-time event so that setSpeed can be called
-            // before we delay.
-            try self.rtNotify();
-
             self.state = .STEPPED;
             slot.delay(self.us_per_step - STEP_TIME);
         },
         .STEPPED => {
             const delta: i32 = if (self.steps_remaining > 0) 1 else -1;
             self.steps_remaining -= delta;
+            self.current_position += delta;
 
             // Track microstep phase in 1/256th of a step
             const step_size: u16 = @divTrunc(256, self.microstep.active);
@@ -373,13 +391,13 @@ const Absolute = microzig.drivers.time.Absolute;
 
 const STSpin = Self;
 
-const MotorRunner = struct {
-    const MotorEvent = struct {
+pub const TestMotorRunner = struct {
+    pub const MotorEvent = struct {
         timestamp: Absolute,
         payload: union(enum) {
             dio: Digital_IO.Event,
             state: EventPayload,
-            rt_state: EventPayload,
+            rt_state: RTEventPayload,
         },
 
         pub fn format(self: MotorEvent, w: *Io.Writer) Io.Writer.Error!void {
@@ -413,25 +431,25 @@ const MotorRunner = struct {
     log: std.ArrayList(MotorEvent) = .empty,
     state: State = .INIT,
 
-    pub fn init(allocator: Allocator) MotorRunner {
+    pub fn init(allocator: Allocator) TestMotorRunner {
         return .{ .allocator = allocator };
     }
 
-    pub fn deinit(self: *MotorRunner) void {
+    pub fn deinit(self: *TestMotorRunner) void {
         for (self.pins.items) |p|
             p.deinit(self.allocator);
         self.pins.deinit(self.allocator);
         self.log.deinit(self.allocator);
     }
 
-    pub fn advance(self: *MotorRunner) !void {
+    pub fn advance(self: *TestMotorRunner) !void {
         self.timestamp = self.slot.deadline;
         _ = try self.slot.poll(self.timestamp);
         const stepper: *STSpin = @ptrCast(@alignCast(self.slot.context));
         self.state = stepper.state;
     }
 
-    pub fn advanceToState(self: *MotorRunner, state: State, max_steps: u32) !void {
+    pub fn advanceToState(self: *TestMotorRunner, state: State, max_steps: u32) !void {
         var avail_steps = max_steps;
 
         while (avail_steps > 0 and self.state == state) : (avail_steps -= 1)
@@ -443,44 +461,44 @@ const MotorRunner = struct {
         assert(avail_steps > 0);
     }
 
-    pub fn pin(self: *MotorRunner, name: []const u8) !Digital_IO {
+    pub fn pin(self: *TestMotorRunner, name: []const u8) !Digital_IO {
         const io = try Digital_IO.init(self.allocator, name, &self.emitter);
         try self.pins.append(self.allocator, io);
         return io;
     }
 
-    pub fn attach(self: *MotorRunner, stepper: *STSpin) void {
+    pub fn attach(self: *TestMotorRunner, stepper: *STSpin) void {
         stepper.state_ee.addListener(onStateChange, self);
         stepper.rt_ee.addListener(onRTStateChange, self);
         self.emitter.addListener(onPinChange, self);
     }
 
-    pub fn clearLog(self: *MotorRunner) void {
+    pub fn clearLog(self: *TestMotorRunner) void {
         self.log.items.len = 0;
     }
 
-    fn logEvent(self: *MotorRunner, event: MotorEvent) !void {
+    fn logEvent(self: *TestMotorRunner, event: MotorEvent) !void {
         try self.log.append(self.allocator, event);
     }
 
     fn onPinChange(ctx: *anyopaque, e: Digital_IO.Event) !void {
-        const self: *MotorRunner = @ptrCast(@alignCast(ctx));
+        const self: *TestMotorRunner = @ptrCast(@alignCast(ctx));
         try self.logEvent(.{ .timestamp = self.timestamp, .payload = .{ .dio = e } });
     }
 
     fn onStateChange(ctx: *anyopaque, e: EventPayload) !void {
-        const self: *MotorRunner = @ptrCast(@alignCast(ctx));
+        const self: *TestMotorRunner = @ptrCast(@alignCast(ctx));
         try self.logEvent(.{ .timestamp = self.timestamp, .payload = .{ .state = e } });
     }
 
-    fn onRTStateChange(ctx: *anyopaque, e: EventPayload) !void {
-        const self: *MotorRunner = @ptrCast(@alignCast(ctx));
+    fn onRTStateChange(ctx: *anyopaque, e: RTEventPayload) !void {
+        const self: *TestMotorRunner = @ptrCast(@alignCast(ctx));
         try self.logEvent(.{ .timestamp = self.timestamp, .payload = .{ .rt_state = e } });
     }
 };
 
 test STSpin {
-    var runner: MotorRunner = .init(std.testing.allocator);
+    var runner: TestMotorRunner = .init(std.testing.allocator);
     defer runner.deinit();
 
     var stepper: STSpin = .init(.{

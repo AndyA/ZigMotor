@@ -180,4 +180,5 @@ test {
     _ = @import("runtime/events.zig");
     _ = @import("runtime/ticker.zig");
     _ = @import("drivers/STSpin.zig");
+    _ = @import("app/stepper.zig");
 }
