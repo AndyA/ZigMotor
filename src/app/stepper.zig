@@ -46,8 +46,7 @@ pub const StepperController = struct {
 
     pub fn currentVelcocity(self: Self) f32 {
         const motor = self.config.motor;
-        return @as(f32, @floatCast(motor.direction.step())) *
-            (@as(f32, @floatCast(motor.speed_rpm100)) / 100);
+        return motor.direction.step() * motor.speed;
     }
 
     fn setSpeed(self: Self, speed: f32) void {

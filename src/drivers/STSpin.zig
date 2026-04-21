@@ -550,7 +550,7 @@ test STSpin {
     // print("{any}\n", .{runner.slot});
     // print("{d}\n", .{stepper.steps_remaining});
 
-    if (true)
+    if (false)
         for (runner.log.items) |item| {
             print("{f}\n", .{item});
         };
