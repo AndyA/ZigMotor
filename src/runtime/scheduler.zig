@@ -49,9 +49,13 @@ pub const ScheduleSlot = struct {
         if (self.deadline.is_reached_by(now)) {
             self.now = now;
             self.deadline = Never;
-            if (hook) |h| try h.advise(.RUNNING);
-            try self.handler(self.context, self);
-            if (hook) |h| try h.advise(.IDLE);
+            if (hook) |h| {
+                try h.advise(.RUNNING);
+                try self.handler(self.context, self);
+                try h.advise(.IDLE);
+            } else {
+                try self.handler(self.context, self);
+            }
             return true;
         }
 
