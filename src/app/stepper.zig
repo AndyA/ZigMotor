@@ -87,7 +87,7 @@ pub const StepperController = struct {
         assert(current >= 0);
 
         if (to_dest == 0 and current <= self.config.min_rpm) {
-            motor.rotate(0);
+            motor.setRemaining(0);
             motor.setSpeed(0);
             try self.adviseState(.STOPPED);
             return;
@@ -95,7 +95,7 @@ pub const StepperController = struct {
 
         if (to_dest < 0) {
             // We've passed it; decelerate as hard as we can
-            const decel = @max(1, @as(f32, @floatCast(elapsed)) / self.config.max_decel);
+            const decel = @max(0, @as(f32, @floatCast(elapsed)) * self.config.max_decel);
             _ = decel;
         } else {}
 

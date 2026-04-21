@@ -88,8 +88,8 @@ microstep: struct {
 
 direction: Direction = .UNKNOWN,
 
-/// Current speed in hundredths of an RPM
-speed_rpm100: u32 = 0,
+/// Current speed in RPM
+speed: f32 = 0,
 
 /// Number of steps still to perform
 steps_remaining: i32 = 0,
@@ -154,7 +154,7 @@ pub fn start(self: *Self, slot: *ScheduleSlot) !void {
 pub fn stop(self: *Self) void {
     if (self.state != .INIT) {
         self.state = .STOPPING;
-        self.speed_rpm100 = 0;
+        self.setSpeed(0);
         self.steps_remaining = 0;
         self.phase = 0;
     }
@@ -164,20 +164,26 @@ pub fn rotate(self: *Self, steps: i32) void {
     self.steps_remaining +|= steps;
 }
 
+pub fn setRemaining(self: *Self, steps: i32) void {
+    self.steps_remaining = steps;
+}
+
 pub fn stepsPerRevolution(self: Self) u32 {
     return self.config.steps_per_revolution * self.microstep.active;
 }
 
 // Set the speed in hundredths of an RPM
-pub fn setSpeed(self: *Self, rpm100: u32) void {
-    if (self.speed_rpm100 == rpm100) return;
-    if (rpm100 != 0) {
-        const spr = self.stepsPerRevolution();
-        const max_rpm100 = std.math.maxInt(u32) / spr;
-        const spm100 = @min(max_rpm100, rpm100) * spr;
-        self.us_per_step = @max(STEP_TIME, (1_000_000 * 60 * 100 / 2) / (spm100 / 2));
+pub fn setSpeed(self: *Self, speed: f32) void {
+    if (self.speed == speed) return;
+    if (speed != 0) {
+        // steps / minute
+        const spm: f32 = @as(f32, @floatFromInt(self.stepsPerRevolution())) * speed;
+        // steps / µS
+        self.us_per_step = @intFromFloat(@max(@as(f32, STEP_TIME), 1_000_000 * 60 / spm));
+    } else {
+        self.us_per_step = 0; // means disabled
     }
-    self.speed_rpm100 = rpm100;
+    self.speed = speed;
 }
 
 pub fn setMicrostep(self: *Self, microstep: u16) !void {
@@ -261,6 +267,9 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
         },
 
         .MOVING => {
+            // RT notify so speed, direction can be set before step starts
+            try self.rtNotify(slot.now);
+
             if (self.steps_remaining == 0) {
                 try self.notifyState(.IDLE);
                 continue :sm self.state;
@@ -288,11 +297,9 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
                 continue :sm self.state;
             }
 
-            // RT notify so speed can be set before step starts
-            try self.rtNotify(slot.now);
-
-            if (self.speed_rpm100 == 0) {
+            if (self.speed == 0) {
                 // Loop while we wait for non-zero speed
+                self.state = .MOVING;
                 slot.delay(IDLE_TIME);
             } else {
                 try self.config.step_pin.write(.high);
@@ -360,7 +367,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
             }
 
             // Recalculate speed for the new microstep
-            self.setSpeed(self.speed_rpm100);
+            self.setSpeed(self.speed);
 
             slot.delay(STEP_TIME);
         },
@@ -529,14 +536,14 @@ test STSpin {
 
     try expectEqual(32, stepper.phase);
 
-    try stepper.setMicrostep(8);
+    // try stepper.setMicrostep(8);
 
     stepper.rotate(-4);
 
     try runner.advanceToState(.IDLE, 100);
-    try runner.advanceToState(.IDLE, 100);
+    // try runner.advanceToState(.IDLE, 100);
 
-    // try expectEqual(224, stepper.phase);
+    try expectEqual(224, stepper.phase);
 
     stepper.stop();
 
@@ -545,7 +552,7 @@ test STSpin {
     // print("{any}\n", .{runner.slot});
     // print("{d}\n", .{stepper.steps_remaining});
 
-    if (false)
+    if (true)
         for (runner.log.items) |item| {
             print("{f}\n", .{item});
         };

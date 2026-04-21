@@ -17,7 +17,7 @@ const Sequencer = struct {
     const Self = @This();
 
     pub const Step = struct {
-        speed: u32 = 1500, // 100ths of RPM
+        speed: f32 = 1500, // 100ths of RPM
         steps: i32,
     };
     const MaxSteps = 100;
@@ -141,17 +141,17 @@ pub fn main() !void {
     });
 
     const steps = &[_]Sequencer.Step{
-        .{ .speed = 80000, .steps = 1000 * 16 },
-        .{ .speed = 113120, .steps = 1000 * 16 },
-        .{ .speed = 159951, .steps = 1000 * 16 },
-        .{ .speed = 226171, .steps = 1000 * 16 },
-        .{ .speed = 319806, .steps = 1000 * 16 },
-        .{ .speed = 452206, .steps = 1000 * 16 },
-        .{ .speed = 639420, .steps = 1000 * 16 },
-        .{ .speed = 904140, .steps = 1000 * 16 },
-        .{ .speed = 1278454, .steps = 1000 * 16 },
-        .{ .speed = 1807734, .steps = 1000 * 16 },
-        .{ .speed = 80000, .steps = -10000 * 16 },
+        .{ .speed = 800.00, .steps = 1000 * 16 },
+        .{ .speed = 1131.20, .steps = 1000 * 16 },
+        .{ .speed = 1599.51, .steps = 1000 * 16 },
+        .{ .speed = 2261.71, .steps = 1000 * 16 },
+        .{ .speed = 3198.06, .steps = 1000 * 16 },
+        .{ .speed = 4522.06, .steps = 1000 * 16 },
+        .{ .speed = 6394.20, .steps = 1000 * 16 },
+        .{ .speed = 9041.40, .steps = 1000 * 16 },
+        .{ .speed = 12784.54, .steps = 1000 * 16 },
+        .{ .speed = 18077.34, .steps = 1000 * 16 },
+        .{ .speed = 80000.00, .steps = -10000 * 16 },
     };
 
     try blue1.activate();
