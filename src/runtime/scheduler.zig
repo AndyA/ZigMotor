@@ -6,6 +6,8 @@ const microzig = if (@import("builtin").is_test)
 else
     @import("microzig");
 
+const callback = @import("callback.zig");
+
 const time = microzig.drivers.time;
 
 const assert = std.debug.assert;
@@ -13,6 +15,9 @@ const assert = std.debug.assert;
 pub const TaskHandler = fn (ctx: *anyopaque, slot: *ScheduleSlot) anyerror!void;
 pub const Now = time.Absolute.from_us(0);
 pub const Never = time.Absolute.from_us(std.math.maxInt(u64));
+
+pub const SchedulerState = enum { IDLE, RUNNING };
+pub const SchedulerHook = callback.makeCallback(SchedulerState);
 
 /// A single scheduler slot
 pub const ScheduleSlot = struct {
@@ -40,15 +45,21 @@ pub const ScheduleSlot = struct {
         self.deadline = self.now.add_duration(time.Duration.from_us(delay_us));
     }
 
-    pub fn poll(self: *Self, now: time.Absolute) !bool {
+    pub fn pollWithHook(self: *Self, now: time.Absolute, hook: ?SchedulerHook) !bool {
         if (self.deadline.is_reached_by(now)) {
             self.now = now;
             self.deadline = Never;
+            if (hook) |h| try h.advise(.RUNNING);
             try self.handler(self.context, self);
+            if (hook) |h| try h.advise(.IDLE);
             return true;
         }
 
         return false;
+    }
+
+    pub fn poll(self: *Self, now: time.Absolute) !bool {
+        return try self.pollWithHook(now, null);
     }
 };
 
@@ -59,11 +70,15 @@ pub fn makeScheduler(comptime size: u8) type {
 
         slots: [size]ScheduleSlot = @splat(.{}),
 
-        pub fn poll(self: *Self, now: time.Absolute) !bool {
+        pub fn pollWithHook(self: *Self, now: time.Absolute, hook: ?SchedulerHook) !bool {
             for (&self.slots) |*slot| {
-                if (try slot.poll(now)) return true;
+                if (try slot.pollWithHook(now, hook)) return true;
             }
             return false;
+        }
+
+        pub fn poll(self: *Self, now: time.Absolute) !bool {
+            return try self.pollWithHook(now, null);
         }
 
         pub fn pri(self: *Self, index: i9) *ScheduleSlot {

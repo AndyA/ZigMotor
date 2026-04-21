@@ -10,6 +10,7 @@ const events = @import("runtime/events.zig");
 
 const Blinker = @import("drivers/Blinker.zig");
 const Alert = @import("drivers/Alert.zig");
+const Indicator = @import("drivers/Indicator.zig");
 const STSpin = @import("drivers/STSpin.zig");
 
 const Sequencer = struct {
@@ -59,6 +60,23 @@ const Sequencer = struct {
 
 const Scheduler = sched.makeScheduler(8);
 
+const SchedulerMonitor = struct {
+    const Self = @This();
+    indicator: Indicator,
+
+    pub fn hook(self: *Self) sched.SchedulerHook {
+        return .{ .context = self, .handler = callback };
+    }
+
+    fn callback(ctx: *anyopaque, state: sched.SchedulerState) !void {
+        const self: *Self = @ptrCast(@alignCast(ctx));
+        switch (state) {
+            .IDLE => try self.indicator.on(),
+            .RUNNING => try self.indicator.off(),
+        }
+    }
+};
+
 pub fn main() !void {
     var scheduler: Scheduler = .empty;
 
@@ -100,16 +118,16 @@ pub fn main() !void {
         @field(pins, field.name) = GPIO_Device.init(pin);
     }
 
-    var led = try Blinker.init_us(pins.led.digital_io(), 125_000);
-    led.schedule(scheduler.pri(-1));
+    // var led = try Blinker.init_us(pins.led.digital_io(), 125_000);
+    // led.schedule(scheduler.pri(-1));
 
     var blue1 = try Alert.init(pins.blue1.digital_io());
     blue1.schedule(scheduler.pri(-2));
-    var blue2 = try Alert.init(pins.blue2.digital_io());
-    blue2.schedule(scheduler.pri(-3));
+    // var blue2 = try Alert.init(pins.blue2.digital_io());
+    // blue2.schedule(scheduler.pri(-3));
 
-    var red1 = try Alert.init(pins.red1.digital_io());
-    red1.schedule(scheduler.pri(-4));
+    // var red1 = try Alert.init(pins.red1.digital_io());
+    // red1.schedule(scheduler.pri(-4));
     var red2 = try Alert.init(pins.red2.digital_io());
     red2.schedule(scheduler.pri(-5));
 
@@ -147,8 +165,13 @@ pub fn main() !void {
 
     try stepper.start(scheduler.pri(0));
 
+    var monitor: SchedulerMonitor = .{ .indicator = try Indicator.init(pins.led.digital_io()) };
+
     while (true) {
-        _ = try scheduler.poll(hal.time.get_time_since_boot());
+        _ = try scheduler.pollWithHook(
+            hal.time.get_time_since_boot(),
+            monitor.hook(),
+        );
     }
 }
 
