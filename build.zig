@@ -30,6 +30,15 @@ pub fn build(b: *std.Build) void {
 
     mb.install_firmware(steppy, .{});
 
+    const swoopy = mb.add_firmware(.{
+        .name = "swoopy",
+        .target = mb.ports.rp2xxx.boards.raspberrypi.pico,
+        .optimize = .ReleaseSmall,
+        .root_source_file = b.path("src/swoopy.zig"),
+    });
+
+    mb.install_firmware(swoopy, .{});
+
     const mule = b.addExecutable(.{
         .name = "mule",
         .root_module = b.createModule(.{

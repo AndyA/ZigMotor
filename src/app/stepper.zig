@@ -9,7 +9,7 @@ const time = microzig.drivers.time;
 const events = @import("../runtime/events.zig");
 const STSpin = @import("../drivers/STSpin.zig");
 
-pub fn square(v: f32) f32 {
+fn square(v: f32) f32 {
     return v * v;
 }
 
@@ -112,10 +112,10 @@ pub const StepperController = struct {
         const stop_dist = (square(m.speed) - square(self.config.min_rpm - MIN_RPM_ADJ)) /
             (2 * c.max_decel);
 
-        print(
-            "speed: {d}, error: {d}, dir: {d}, dest_dist: {d}, stop_dist: {d}, ",
-            .{ m.getActualSpeed(), pos_error, dir, dest_dist, stop_dist },
-        );
+        // print(
+        //     "speed: {d}, error: {d}, dir: {d}, dest_dist: {d}, stop_dist: {d}, ",
+        //     .{ m.getActualSpeed(), pos_error, dir, dest_dist, stop_dist },
+        // );
 
         if (dest_dist <= stop_dist) {
             // Brake!
@@ -125,12 +125,12 @@ pub const StepperController = struct {
                 m.setRemaining(-dir * 2)
             else
                 m.setRemaining(dir * 2);
-            print("brake: {d}\n", .{m.steps_remaining});
+            // print("brake: {d}\n", .{m.steps_remaining});
         } else {
             // Accelerate!
             m.setSpeed(@max(c.min_rpm, @min(c.max_rpm, m.speed + c.max_accel * elapsed)));
             m.setRemaining(@as(i32, @intCast(std.math.sign(pos_error))) * 2);
-            print("accelerate: {d}\n", .{m.steps_remaining});
+            // print("accelerate: {d}\n", .{m.steps_remaining});
         }
     }
 
