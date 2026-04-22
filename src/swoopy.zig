@@ -19,7 +19,7 @@ const Sequencer = struct {
     const Self = @This();
 
     pub const Step = struct {
-        set_point: i16,
+        set_point: i64,
     };
     const MaxSteps = 100;
 
@@ -148,10 +148,10 @@ pub fn main() !void {
     controller.attach();
 
     const steps = &[_]Sequencer.Step{
-        .{ .set_point = 3200 },
-        .{ .set_point = -3200 },
-        .{ .set_point = 6400 },
-        .{ .set_point = -6400 },
+        .{ .set_point = 360000 },
+        .{ .set_point = -360000 },
+        .{ .set_point = 720000 },
+        .{ .set_point = -720000 },
     };
 
     try blue1.activate();
@@ -160,6 +160,7 @@ pub fn main() !void {
     sequencer.addSteps(steps);
     try sequencer.attach(&controller);
 
+    try motor.setMicrostep(16);
     try motor.start(scheduler.pri(0));
 
     var monitor: SchedulerMonitor = .{
