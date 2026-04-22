@@ -1,5 +1,6 @@
 const std = @import("std");
 const assert = std.debug.assert;
+const print = std.debug.print;
 
 const microzig = @import("../tools/bootstrap.zig").microzig;
 
@@ -37,6 +38,7 @@ pub const State = enum(u8) {
     INIT,
     IDLE,
 
+    START,
     MOVING,
     STEP,
     STEPPING,
@@ -169,17 +171,32 @@ pub fn stepsPerRevolution(self: Self) u32 {
     return self.config.steps_per_revolution * self.microstep.active;
 }
 
+pub fn floatStepsPerRevolution(self: Self) f32 {
+    return @floatFromInt(self.stepsPerRevolution());
+}
+
 // Set the speed in RPM
 pub fn setSpeed(self: *Self, rpm: f32) void {
     assert(rpm >= 0);
     if (self.speed == rpm) return;
     if (rpm != 0) {
-        const spm: f32 = @as(f32, @floatFromInt(self.stepsPerRevolution())) * rpm;
-        self.us_per_step = @intFromFloat(@max(@as(f32, STEP_TIME), 1_000_000 * 60 / spm));
+        const spm = self.floatStepsPerRevolution() * rpm;
+        self.us_per_step = @intFromFloat(@max(
+            @as(f32, STEP_TIME),
+            @round(1_000_000 * 60 / spm),
+        ));
     } else {
         self.us_per_step = 0; // means disabled
     }
     self.speed = rpm;
+}
+
+// Get the computed speed based on us_per_step
+pub fn getActualSpeed(self: Self) f32 {
+    if (self.speed == 0)
+        return 0;
+    return (1_000_000 * 60) /
+        (@as(f32, @floatFromInt(self.us_per_step)) * self.floatStepsPerRevolution());
 }
 
 pub fn setMicrostep(self: *Self, microstep: u16) !void {
@@ -255,13 +272,19 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
             }
 
             if (self.steps_remaining != 0) {
-                try self.notifyState(.MOVING);
+                try self.notifyState(.START);
                 continue :sm self.state;
             }
 
             // Keep the RT notifications coming
             try self.rtNotify(slot.now);
             slot.delay(IDLE_TIME);
+        },
+
+        .START => {
+            self.direction = .UNKNOWN;
+            self.state = .MOVING;
+            continue :sm self.state;
         },
 
         .MOVING => {
@@ -389,7 +412,6 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
 
 const expectEqual = std.testing.expectEqual;
 const Io = std.Io;
-const print = std.debug.print;
 const Allocator = std.mem.Allocator;
 
 const Absolute = microzig.drivers.time.Absolute;

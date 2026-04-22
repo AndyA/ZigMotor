@@ -16,6 +16,8 @@ pub fn square(v: f32) f32 {
 pub const StepperController = struct {
     const Self = @This();
 
+    const MIN_RPM_ADJ: f32 = 5;
+
     pub const Config = struct {
         motor: *STSpin,
         min_rpm: f32,
@@ -79,14 +81,10 @@ pub const StepperController = struct {
         const c = self.config;
         const m = c.motor;
 
-        // Current speed. Always +ve
-        const speed = m.speed;
-        assert(speed >= 0);
-
         // How many steps are we off?
         const pos_error = self.set_point - m.current_position;
 
-        if (pos_error == 0 and speed <= c.min_rpm + 1) {
+        if (pos_error == 0 and m.speed <= c.min_rpm) {
             // We've arrived
             m.setSpeed(0);
             m.setRemaining(0);
@@ -106,24 +104,33 @@ pub const StepperController = struct {
 
         // Distance to destination in revolutions; -ve means we're going the wrong way
         const dest_dist = @as(f32, @floatFromInt(pos_error * dir)) /
-            @as(f32, @floatFromInt(m.stepsPerRevolution()));
+            m.floatStepsPerRevolution();
 
-        // How far will we travel before we can stop?
-        const stop_dist = (square(speed) - square(self.config.min_rpm)) /
+        // How far will we travel before we can stop? We aim for MIN_RPM_ADJ slower than
+        // we need to avoid overshoot. I don't fully understand the overshoot but I assume
+        // it's caused be the cummulative errors in computed speed / actual speed. Shrug.
+        const stop_dist = (square(m.speed) - square(self.config.min_rpm - MIN_RPM_ADJ)) /
             (2 * c.max_decel);
+
+        print(
+            "speed: {d}, error: {d}, dir: {d}, dest_dist: {d}, stop_dist: {d}, ",
+            .{ m.getActualSpeed(), pos_error, dir, dest_dist, stop_dist },
+        );
 
         if (dest_dist <= stop_dist) {
             // Brake!
-            m.setSpeed(@max(c.min_rpm, speed - c.max_decel * elapsed));
+            m.setSpeed(@max(c.min_rpm, m.speed - c.max_decel * elapsed));
             // Do we need to reverse?
             if (m.speed <= c.min_rpm and std.math.sign(pos_error) != std.math.sign(dir))
                 m.setRemaining(-dir * 2)
             else
                 m.setRemaining(dir * 2);
+            print("brake: {d}\n", .{m.steps_remaining});
         } else {
             // Accelerate!
-            m.setSpeed(@max(c.min_rpm, @min(c.max_rpm, speed + c.max_accel * elapsed)));
+            m.setSpeed(@max(c.min_rpm, @min(c.max_rpm, m.speed + c.max_accel * elapsed)));
             m.setRemaining(@as(i32, @intCast(std.math.sign(pos_error))) * 2);
+            print("accelerate: {d}\n", .{m.steps_remaining});
         }
     }
 

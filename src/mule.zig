@@ -38,7 +38,7 @@ pub fn main(init: std.process.Init) !void {
     try motor.start(&runner.slot);
     try runner.advance();
 
-    controller.set(3600);
+    controller.set(3200);
 
     while (controller.state == .STOPPED)
         try runner.advance();
@@ -46,12 +46,15 @@ pub fn main(init: std.process.Init) !void {
     while (controller.state == .MOVING) {
         try runner.advance();
         // runner.printLog();
-        print("controller: {s}, speed: {d}, µS/step: {d} position: {d}, direction: {s}\n", .{
+        print("controller: {s}, speed: {d}/{d}, µS/step: {d} position: {d}, direction: {s}\n", .{
             @tagName(controller.state),
             motor.speed,
+            motor.getActualSpeed(),
             motor.us_per_step,
             motor.current_position,
             @tagName(motor.direction),
         });
+        // if (motor.current_position > 6400)
+        //     break;
     }
 }
