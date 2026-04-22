@@ -7,6 +7,7 @@ const GPIO_Device = hal.drivers.GPIO_Device;
 
 const sched = @import("runtime/scheduler.zig");
 const events = @import("runtime/events.zig");
+const clock = @import("runtime/clock.zig");
 
 const Blinker = @import("drivers/Blinker.zig");
 const Alert = @import("drivers/Alert.zig");
@@ -173,7 +174,7 @@ pub fn main() !void {
 
     while (true) {
         _ = try scheduler.pollWithHook(
-            hal.time.get_time_since_boot(),
+            clock.microsecondsSinceBoot(),
             monitor.hook(),
         );
     }

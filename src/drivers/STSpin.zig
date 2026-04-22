@@ -11,6 +11,7 @@ const Digital_IO = microzig.drivers.base.Digital_IO;
 
 const ScheduleSlot = @import("../runtime/scheduler.zig").ScheduleSlot;
 const events = @import("../runtime/events.zig");
+const clock = @import("../runtime/clock.zig");
 
 const Self = @This();
 
@@ -21,13 +22,13 @@ pub const IDLE_TIME = 100; // µS
 // We assert STEP for up to 2µS. If we used 1µS we might
 // sometimes get a much shorter delay due to scheduler
 // granularity. We only actually need 100ns
-pub const STEP_TIME = 2; // µS
-pub const MODE_HOLD_TIME = 101; // µS
+pub const STEP_TIME = clock.US_PER_TICK * 2; // µS
+pub const MODE_HOLD_TIME = 100 + clock.US_PER_TICK; // µS
 
 pub const Config = struct {
+    steps_per_revolution: u16 = 200,
     step_pin: Digital_IO,
     dir_pin: Digital_IO,
-    steps_per_revolution: u16 = 200,
     mode1_pin: ?Digital_IO = null,
     mode2_pin: ?Digital_IO = null,
     en_fault_pin: ?Digital_IO = null,
@@ -148,7 +149,7 @@ pub fn start(self: *Self, slot: *ScheduleSlot) !void {
 
     if (self.canSetMicrostep()) {
         // Force state machine to configure microstep
-        const wrong: u8 = if (self.microstep.active == 8) 16 else 8;
+        const wrong: u8 = if (self.microstep.active == 8) 16 else 32;
         self.microstep.active = wrong;
         self.microstep.current = wrong;
     }
@@ -194,7 +195,7 @@ pub fn floatStepsPerRevolution(self: Self) f32 {
 // Set the speed in RPM
 pub fn setSpeed(self: *Self, rpm: f32) void {
     assert(rpm >= 0);
-    if (self.speed == rpm) return;
+
     if (rpm != 0) {
         const spm = self.floatStepsPerRevolution() * rpm;
         self.us_per_step = @intFromFloat(@max(

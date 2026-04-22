@@ -12,32 +12,24 @@ pub fn build(b: *std.Build) void {
     const mz_dep = b.dependency("microzig", .{});
     const mb = MicroBuild.init(b, mz_dep) orelse return;
 
-    const blinky = mb.add_firmware(.{
-        .name = "blinky",
-        .target = mb.ports.rp2xxx.boards.raspberrypi.pico,
-        .optimize = .ReleaseSmall,
-        .root_source_file = b.path("src/blinky.zig"),
-    });
+    const firmwares = [_][]const u8{
+        "blinky",
+        "clocky",
+        "steppy",
+        "swoopy",
+        "speedy",
+    };
 
-    mb.install_firmware(blinky, .{});
+    inline for (firmwares) |name| {
+        const fw = mb.add_firmware(.{
+            .name = name,
+            .target = mb.ports.rp2xxx.boards.raspberrypi.pico,
+            .optimize = .ReleaseFast,
+            .root_source_file = b.path("src/" ++ name ++ ".zig"),
+        });
 
-    const steppy = mb.add_firmware(.{
-        .name = "steppy",
-        .target = mb.ports.rp2xxx.boards.raspberrypi.pico,
-        .optimize = .ReleaseSmall,
-        .root_source_file = b.path("src/steppy.zig"),
-    });
-
-    mb.install_firmware(steppy, .{});
-
-    const swoopy = mb.add_firmware(.{
-        .name = "swoopy",
-        .target = mb.ports.rp2xxx.boards.raspberrypi.pico,
-        .optimize = .ReleaseSmall,
-        .root_source_file = b.path("src/swoopy.zig"),
-    });
-
-    mb.install_firmware(swoopy, .{});
+        mb.install_firmware(fw, .{});
+    }
 
     const mule = b.addExecutable(.{
         .name = "mule",

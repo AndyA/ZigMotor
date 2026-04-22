@@ -7,6 +7,7 @@ const GPIO_Device = hal.drivers.GPIO_Device;
 
 const sched = @import("runtime/scheduler.zig");
 const events = @import("runtime/events.zig");
+const clock = @import("runtime/clock.zig");
 
 const Blinker = @import("drivers/Blinker.zig");
 const Alert = @import("drivers/Alert.zig");
@@ -141,17 +142,14 @@ pub fn main() !void {
     });
 
     const steps = &[_]Sequencer.Step{
-        .{ .speed = 800.00, .steps = 1000 * 16 },
-        .{ .speed = 1131.20, .steps = 1000 * 16 },
-        .{ .speed = 1599.51, .steps = 1000 * 16 },
-        .{ .speed = 2261.71, .steps = 1000 * 16 },
-        .{ .speed = 3198.06, .steps = 1000 * 16 },
-        .{ .speed = 4522.06, .steps = 1000 * 16 },
-        .{ .speed = 6394.20, .steps = 1000 * 16 },
-        .{ .speed = 9041.40, .steps = 1000 * 16 },
-        .{ .speed = 12784.54, .steps = 1000 * 16 },
-        .{ .speed = 18077.34, .steps = 1000 * 16 },
-        .{ .speed = 60.00, .steps = -10000 * 16 },
+        .{ .speed = 60.00, .steps = 400 }, // M0 / M8
+        .{ .speed = 120.00, .steps = -800 }, // M1
+        .{ .speed = 240.00, .steps = 1600 }, // M2
+        .{ .speed = 480.00, .steps = -3200 }, // M3
+        .{ .speed = 960.00, .steps = 6400 }, // M4
+        .{ .speed = 1920.00, .steps = -12800 }, // M5 can't do these
+        .{ .speed = 3840.00, .steps = 25600 }, // M6
+        .{ .speed = 7680.00, .steps = -51200 }, // M7
     };
 
     try blue1.activate();
@@ -171,7 +169,7 @@ pub fn main() !void {
 
     while (true) {
         _ = try scheduler.pollWithHook(
-            hal.time.get_time_since_boot(),
+            clock.microsecondsSinceBoot(),
             monitor.hook(),
         );
     }

@@ -27,9 +27,9 @@ pub fn main(init: std.process.Init) !void {
     var controller = stepper.StepperController.init(.{
         .motor = &motor,
         .min_rpm = 60,
-        .max_rpm = 600,
-        .max_accel = 200000,
-        .max_decel = 200000,
+        .max_rpm = 2400,
+        .max_accel = 500000,
+        .max_decel = 500000,
     });
     controller.attach();
 
@@ -46,7 +46,8 @@ pub fn main(init: std.process.Init) !void {
     while (controller.state == .MOVING) {
         try runner.advance();
         // runner.printLog();
-        print("controller: {s}, speed: {d}/{d}, µS/step: {d} position: {d}, direction: {s}\n", .{
+        print("time: {d}, controller: {s}, speed: {d}/{d}, µS/step: {d} position: {d}, direction: {s}\n", .{
+            runner.slot.now.to_us(),
             @tagName(controller.state),
             motor.speed,
             motor.getActualSpeed(),

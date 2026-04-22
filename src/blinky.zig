@@ -6,6 +6,7 @@ const GPIO_Device = hal.drivers.GPIO_Device;
 const Digital_IO = microzig.drivers.base.Digital_IO;
 
 const sched = @import("runtime/scheduler.zig");
+const clock = @import("runtime/clock.zig");
 const events = @import("runtime/events.zig");
 const Blinker = @import("drivers/Blinker.zig");
 
@@ -40,6 +41,6 @@ pub fn main() !void {
     led4.schedule(scheduler.pri(4));
 
     while (true) {
-        _ = try scheduler.poll(hal.time.get_time_since_boot());
+        _ = try scheduler.poll(clock.microsecondsSinceBoot());
     }
 }
