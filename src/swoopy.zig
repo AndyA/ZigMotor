@@ -148,14 +148,14 @@ pub fn main() !void {
     controller.attach();
 
     const steps = &[_]Sequencer.Step{
-        .{ .set_point = 3600 },
-        .{ .set_point = -3600 },
-        .{ .set_point = 7200 },
-        .{ .set_point = -7200 },
-        .{ .set_point = 14400 },
-        .{ .set_point = -14400 },
-        .{ .set_point = 28800 },
-        .{ .set_point = -28800 },
+        .{ .set_point = 3200 },
+        .{ .set_point = -3200 },
+        .{ .set_point = 6400 },
+        .{ .set_point = -6400 },
+        .{ .set_point = 12800 },
+        .{ .set_point = -12800 },
+        .{ .set_point = 25600 },
+        .{ .set_point = -25600 },
     };
 
     try blue1.activate();
