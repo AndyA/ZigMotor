@@ -595,16 +595,8 @@ test STSpin {
     // print("{any}\n", .{runner.slot});
     // print("{d}\n", .{stepper.steps_remaining});
 
-    if (true)
+    if (false)
         runner.printLog();
 
     stepper.rotate(100);
-
-    if (false) {
-        var speed: u32 = 1;
-        while (speed < 5_000_000) : (speed *= 2) {
-            stepper.setSpeed(speed);
-            print("speed: {d:>8}, µS/step: {d:>8}\n", .{ speed, stepper.us_per_step });
-        }
-    }
 }

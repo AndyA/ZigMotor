@@ -141,17 +141,21 @@ pub fn main() !void {
     var controller = StepperController.init(.{
         .motor = &motor,
         .min_rpm = 60,
-        .max_rpm = 600,
-        .max_accel = 200000,
-        .max_decel = 200000,
+        .max_rpm = 2400,
+        .max_accel = 500000,
+        .max_decel = 500000,
     });
     controller.attach();
 
     const steps = &[_]Sequencer.Step{
-        .{ .set_point = 360000 },
-        .{ .set_point = -360000 },
-        .{ .set_point = 720000 },
-        .{ .set_point = -720000 },
+        .{ .set_point = 3600 },
+        .{ .set_point = -3600 },
+        .{ .set_point = 7200 },
+        .{ .set_point = -7200 },
+        .{ .set_point = 14400 },
+        .{ .set_point = -14400 },
+        .{ .set_point = 28800 },
+        .{ .set_point = -28800 },
     };
 
     try blue1.activate();

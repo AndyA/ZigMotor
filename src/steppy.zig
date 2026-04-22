@@ -141,17 +141,14 @@ pub fn main() !void {
     });
 
     const steps = &[_]Sequencer.Step{
-        .{ .speed = 800.00, .steps = 1000 * 16 },
-        .{ .speed = 1131.20, .steps = 1000 * 16 },
-        .{ .speed = 1599.51, .steps = 1000 * 16 },
-        .{ .speed = 2261.71, .steps = 1000 * 16 },
-        .{ .speed = 3198.06, .steps = 1000 * 16 },
-        .{ .speed = 4522.06, .steps = 1000 * 16 },
-        .{ .speed = 6394.20, .steps = 1000 * 16 },
-        .{ .speed = 9041.40, .steps = 1000 * 16 },
-        .{ .speed = 12784.54, .steps = 1000 * 16 },
-        .{ .speed = 18077.34, .steps = 1000 * 16 },
-        .{ .speed = 80000.00, .steps = -10000 * 16 },
+        .{ .speed = 60, .steps = 600 },
+        .{ .speed = 84.83999999999999, .steps = 600 },
+        .{ .speed = 119.96375999999998, .steps = 600 },
+        .{ .speed = 169.62875663999995, .steps = 600 },
+        .{ .speed = 239.8550618889599, .steps = 600 },
+        .{ .speed = 339.1550575109893, .steps = 600 },
+        .{ .speed = 479.56525132053883, .steps = 600 },
+        .{ .speed = 60, .steps = -4200 },
     };
 
     try blue1.activate();
