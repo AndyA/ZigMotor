@@ -1,10 +1,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-const microzig = if (@import("builtin").is_test)
-    @import("../testing/microzig.zig")
-else
-    @import("microzig");
+const microzig = @import("../tools/bootstrap.zig").microzig;
 
 const hal = microzig.hal;
 const time = microzig.drivers.time;
@@ -67,7 +64,7 @@ pub const Direction = enum(u2) {
     CCW,
     UNKNOWN, // at startup
 
-    pub fn step(self: Direction) i2 {
+    pub fn step(self: Direction) i8 {
         return switch (self) {
             .CW => 1,
             .CCW => -1,
@@ -433,7 +430,7 @@ pub const TestMotorRunner = struct {
 
     allocator: Allocator,
     timestamp: Absolute = .from_us(0),
-    slot: ScheduleSlot = .{},
+    slot: ScheduleSlot = .{ .now = .from_us(1_000_000) },
     emitter: Digital_IO.Emitter = .empty,
     pins: std.ArrayList(Digital_IO) = .empty,
     log: std.ArrayList(MotorEvent) = .empty,
@@ -483,6 +480,13 @@ pub const TestMotorRunner = struct {
 
     pub fn clearLog(self: *TestMotorRunner) void {
         self.log.items.len = 0;
+    }
+
+    pub fn printLog(self: *TestMotorRunner) void {
+        for (self.log.items) |item| {
+            print("{f}\n", .{item});
+            self.clearLog();
+        }
     }
 
     fn logEvent(self: *TestMotorRunner, event: MotorEvent) !void {

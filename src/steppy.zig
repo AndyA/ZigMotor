@@ -165,7 +165,9 @@ pub fn main() !void {
 
     try stepper.start(scheduler.pri(0));
 
-    var monitor: SchedulerMonitor = .{ .indicator = try Indicator.init(pins.led.digital_io()) };
+    var monitor: SchedulerMonitor = .{
+        .indicator = try Indicator.init(pins.led.digital_io()),
+    };
 
     while (true) {
         _ = try scheduler.pollWithHook(

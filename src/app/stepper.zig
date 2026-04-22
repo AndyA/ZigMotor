@@ -1,15 +1,17 @@
 const std = @import("std");
 const assert = std.debug.assert;
+const print = std.debug.print;
 
-const microzig = if (@import("builtin").is_test)
-    @import("../testing/microzig.zig")
-else
-    @import("microzig");
+const microzig = @import("../tools/bootstrap.zig").microzig;
 
 const time = microzig.drivers.time;
 
 const events = @import("../runtime/events.zig");
 const STSpin = @import("../drivers/STSpin.zig");
+
+pub fn square(v: f32) f32 {
+    return v * v;
+}
 
 pub const StepperController = struct {
     const Self = @This();
@@ -58,7 +60,7 @@ pub const StepperController = struct {
         }
     }
 
-    pub fn set(self: *Self, set_point: i64) !void {
+    pub fn set(self: *Self, set_point: i64) void {
         self.set_point = set_point;
     }
 
@@ -84,7 +86,7 @@ pub const StepperController = struct {
         // How many steps are we off?
         const pos_error = self.set_point - m.current_position;
 
-        if (pos_error == 0 and speed <= c.min_rpm) {
+        if (pos_error == 0 and speed <= c.min_rpm + 1) {
             // We've arrived
             m.setSpeed(0);
             m.setRemaining(0);
@@ -107,16 +109,21 @@ pub const StepperController = struct {
             @as(f32, @floatFromInt(m.stepsPerRevolution()));
 
         // How far will we travel before we can stop?
-        const stop_dist = (speed * speed) / (2 * c.max_decel);
+        const stop_dist = (square(speed) - square(self.config.min_rpm)) /
+            (2 * c.max_decel);
 
         if (dest_dist <= stop_dist) {
             // Brake!
-            m.setSpeed(@max(0, speed - c.max_decel * elapsed));
-            m.setRemaing(dir * 2);
+            m.setSpeed(@max(c.min_rpm, speed - c.max_decel * elapsed));
+            // Do we need to reverse?
+            if (m.speed <= c.min_rpm and std.math.sign(pos_error) != std.math.sign(dir))
+                m.setRemaining(-dir * 2)
+            else
+                m.setRemaining(dir * 2);
         } else {
             // Accelerate!
             m.setSpeed(@max(c.min_rpm, @min(c.max_rpm, speed + c.max_accel * elapsed)));
-            m.setRemaining(std.math.sign(pos_error) * 2);
+            m.setRemaining(@as(i32, @intCast(std.math.sign(pos_error))) * 2);
         }
     }
 

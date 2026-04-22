@@ -1,10 +1,7 @@
 // Simple scheduler
 const std = @import("std");
 
-const microzig = if (@import("builtin").is_test)
-    @import("../testing/microzig.zig")
-else
-    @import("microzig");
+const microzig = @import("../tools/bootstrap.zig").microzig;
 
 const callback = @import("callback.zig");
 
