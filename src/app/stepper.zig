@@ -59,17 +59,16 @@ pub const StepperController = struct {
     }
 
     pub fn set(self: *Self, set_point: i64) !void {
-        if (self.set_point != set_point) {
-            self.set_point = set_point;
-            if (self.state == .STOPPED) {
-                try self.adviseState(.MOVING);
-                self.last_tick = .from_us(0);
-                self.tick(self.last_tick);
-            }
-        }
+        self.set_point = set_point;
     }
 
     fn tick(self: *Self, now: time.Absolute) !void {
+        if (self.last_tick == time.Absolute.from_us(0)) {
+            // Seed so that elapsed will be sane.
+            self.last_tick = now;
+            return;
+        }
+
         // Minutes because our accel / decel are in rpm/m
         const elapsed: f32 = @as(f32, @floatFromInt(now.diff(self.last_tick).to_us())) /
             1_000_000 / 60;
@@ -93,6 +92,8 @@ pub const StepperController = struct {
             return;
         }
 
+        try self.adviseState(.MOVING);
+
         // If the motor knows which way it's going use that otherwise set the direction
         // based on the direction we need to turn.
         const dir = switch (m.direction.step()) {
@@ -104,7 +105,8 @@ pub const StepperController = struct {
         // Distance to destination in revolutions; -ve means we're going the wrong way
         const dest_dist = @as(f32, @floatFromInt(pos_error * dir)) /
             @as(f32, @floatFromInt(m.stepsPerRevolution()));
-        // How far before we can stop?
+
+        // How far will we travel before we can stop?
         const stop_dist = (speed * speed) / (2 * c.max_decel);
 
         if (dest_dist <= stop_dist) {

@@ -262,6 +262,8 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
                 continue :sm self.state;
             }
 
+            // Keep the RT notifications coming
+            try self.rtNotify(slot.now);
             slot.delay(IDLE_TIME);
         },
 
