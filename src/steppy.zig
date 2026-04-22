@@ -17,7 +17,7 @@ const Sequencer = struct {
     const Self = @This();
 
     pub const Step = struct {
-        speed: f32 = 1500, // 100ths of RPM
+        speed: f32 = 300,
         steps: i32,
     };
     const MaxSteps = 100;
