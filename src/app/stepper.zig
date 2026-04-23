@@ -51,6 +51,10 @@ pub const StepperController = struct {
     run_mode: RunMode = .SERVO,
     run_dir: STSpin.Direction = .UNKNOWN,
 
+    // Cached values to avoid FP division
+    recip_max_decel: f32 = undefined,
+    revs_per_step: f32 = undefined,
+
     fn checkConfig(config: Config) void {
         assert(config.max_accel > 0);
         assert(config.max_decel > 0);
@@ -63,6 +67,11 @@ pub const StepperController = struct {
         return .{ .config = config, .original_config = config };
     }
 
+    fn updatedCached(self: *Self) void {
+        self.recip_max_decel = 1 / (2 * self.config.max_decel);
+        self.revs_per_step = 1 / self.config.motor.floatStepsPerRevolution();
+    }
+
     pub fn setConfig(self: *Self, config: PartialConfig) void {
         var new_config = self.config;
         inline for (std.meta.fieldNames(PartialConfig)) |field| {
@@ -71,10 +80,12 @@ pub const StepperController = struct {
         }
         checkConfig(new_config);
         self.config = new_config;
+        self.updatedCached();
     }
 
     pub fn resetConfig(self: *Self) void {
         self.config = self.original_config;
+        self.updatedCached();
     }
 
     pub fn attach(self: *Self) void {
@@ -82,6 +93,7 @@ pub const StepperController = struct {
         m.rt_ee.addListener(onRTStateChange, self);
         m.setSpeed(0);
         m.setRemaining(0);
+        self.updatedCached();
     }
 
     fn adviseState(self: *Self, state: State) !void {
@@ -156,14 +168,13 @@ pub const StepperController = struct {
         };
 
         // Distance to destination in revolutions; -ve means we're going the wrong way
-        const dest_dist = @as(f32, @floatFromInt(pos_error)) * dir /
-            m.floatStepsPerRevolution();
+        const dest_dist = @as(f32, @floatFromInt(pos_error)) * dir * self.revs_per_step;
 
         // How far will we travel before we can stop? We aim for MIN_RPM_ADJ slower than
         // we need to avoid overshoot. I don't fully understand the overshoot but I assume
         // it's caused be the cummulative errors in computed speed / actual speed. Shrug.
-        const stop_dist = (square(m.speed) - square(self.config.min_rpm - MIN_RPM_ADJ)) /
-            (2 * c.max_decel);
+        const stop_dist = self.recip_max_decel *
+            (square(m.speed) - square(self.config.min_rpm - MIN_RPM_ADJ));
 
         // print(
         //     "speed: {d}, error: {d}, dir: {d}, dest_dist: {d}, stop_dist: {d}, ",
