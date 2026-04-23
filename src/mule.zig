@@ -58,7 +58,4 @@ pub fn main(init: std.process.Init) !void {
         // if (motor.current_position > 6400)
         //     break;
     }
-
-    const tc: f32 = @as(f32, 10) / @as(f32, 3);
-    print("{d}\n", .{tc});
 }
