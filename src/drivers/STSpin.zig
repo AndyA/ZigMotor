@@ -253,23 +253,18 @@ pub fn setMicrostep(self: *Self, microstep: u16) !void {
 //  1  1  0  0 Full-step - 1/256th step (1)
 
 fn lookupMicrostep(microstep: u16) error{BadMicrostep}!u4 {
-    const table = [_]struct { ms: u16, bits: u4 }{
-        .{ .ms = 1, .bits = 0b0000 },
-        .{ .ms = 2, .bits = 0b0101 },
-        .{ .ms = 4, .bits = 0b1010 },
-        .{ .ms = 8, .bits = 0b0111 },
-        .{ .ms = 16, .bits = 0b1111 },
-        .{ .ms = 32, .bits = 0b0010 },
-        .{ .ms = 64, .bits = 0b1011 },
-        .{ .ms = 128, .bits = 0b0001 },
-        .{ .ms = 256, .bits = 0b0011 },
+    return switch (microstep) {
+        1 => 0b0000,
+        2 => 0b0101,
+        4 => 0b1010,
+        8 => 0b0111,
+        16 => 0b1111,
+        32 => 0b0010,
+        64 => 0b1011,
+        128 => 0b0001,
+        256 => 0b0011,
+        else => error.BadMicrostep,
     };
-    for (table) |ent| {
-        if (ent.ms == microstep)
-            return ent.bits;
-    }
-
-    return error.BadMicrostep;
 }
 
 fn notifyState(self: *Self, state: State) !void {
