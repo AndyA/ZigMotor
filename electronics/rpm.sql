@@ -17,9 +17,7 @@ SELECT time, time - lag (time, 1, 0) OVER ( ORDER BY time ) AS delta
 FROM step_times;
 
 CREATE OR REPLACE VIEW step_rate AS
-SELECT time, 1 / delta AS rate
-FROM step_delta
-WHERE time > 0.000707083;
+SELECT time, 1 / delta AS rate FROM step_delta WHERE time > 0.000707083;
 
 SET VARIABLE max_time = ( SELECT MAX(time) FROM step_rate );
 
