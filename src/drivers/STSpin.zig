@@ -84,6 +84,13 @@ microstep: struct {
     active: u16 = 16, // what the state machine observes
     pending: u16 = 16, // desired; switch at next idle
     current: u16 = 16, // current hardware setting when no full-step override
+
+    pub fn activeOrPending(self: @This()) u16 {
+        if (self.active != 0)
+            return self.active;
+        assert(self.pending != 0);
+        return self.pending;
+    }
 } = .{},
 
 direction: Direction = .UNKNOWN,
@@ -149,9 +156,8 @@ pub fn start(self: *Self, slot: *ScheduleSlot) !void {
 
     if (self.canSetMicrostep()) {
         // Force state machine to configure microstep
-        const wrong: u8 = if (self.microstep.active == 8) 16 else 32;
-        self.microstep.active = wrong;
-        self.microstep.current = wrong;
+        self.microstep.active = 0;
+        self.microstep.current = 0;
     }
 
     try self.config.dir_pin.write(.low);
@@ -185,7 +191,7 @@ pub fn setRemaining(self: *Self, steps: i32) void {
 }
 
 pub fn stepsPerRevolution(self: Self) u32 {
-    return self.config.steps_per_revolution * self.microstep.active;
+    return self.config.steps_per_revolution * self.microstep.activeOrPending();
 }
 
 pub fn floatStepsPerRevolution(self: Self) f32 {
