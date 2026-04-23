@@ -19,9 +19,9 @@ const Self = @This();
 // we need to do anything
 pub const IDLE_TIME = 100; // µS
 
-// We assert STEP for up to 2µS. If we used 1µS we might
-// sometimes get a much shorter delay due to scheduler
-// granularity. We only actually need 100ns
+// We assert STEP for up to two ticks. If we used one tick we might
+// sometimes get a much shorter delay due to scheduler granularity.
+// We only actually need 100ns
 pub const STEP_TIME = clock.US_PER_TICK * 2; // µS
 pub const MODE_HOLD_TIME = 100 + clock.US_PER_TICK; // µS
 
@@ -192,8 +192,7 @@ pub fn floatStepsPerRevolution(self: Self) f32 {
     return @floatFromInt(self.stepsPerRevolution());
 }
 
-// Set the speed in RPM
-pub fn setSpeed(self: *Self, rpm: f32) void {
+fn recalculateSpeed(self: *Self, rpm: f32) void {
     assert(rpm >= 0);
 
     if (rpm != 0) {
@@ -205,7 +204,14 @@ pub fn setSpeed(self: *Self, rpm: f32) void {
     } else {
         self.us_per_step = 0; // means disabled
     }
-    self.speed = rpm;
+}
+
+// Set the speed in RPM
+pub fn setSpeed(self: *Self, rpm: f32) void {
+    if (rpm != self.speed) {
+        self.recalculateSpeed(rpm);
+        self.speed = rpm;
+    }
 }
 
 // Get the computed speed based on us_per_step
@@ -405,7 +411,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
             }
 
             // Recalculate speed for the new microstep
-            self.setSpeed(self.speed);
+            self.recalculateSpeed(self.speed);
 
             slot.delay(STEP_TIME);
         },

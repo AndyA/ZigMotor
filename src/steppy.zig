@@ -145,7 +145,7 @@ pub fn main() !void {
         .{ .speed = 60.00, .steps = 400 }, // M0 / M8
         .{ .speed = 120.00, .steps = -800 }, // M1
         .{ .speed = 240.00, .steps = 1600 }, // M2
-        .{ .speed = 480.00, .steps = -3200 }, // M3
+        .{ .speed = 480.00, .steps = -3200 }, // M3 unstable after this
         .{ .speed = 960.00, .steps = 6400 }, // M4
         .{ .speed = 1920.00, .steps = -12800 }, // M5 can't do these
         .{ .speed = 3840.00, .steps = 25600 }, // M6
