@@ -343,7 +343,8 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
         .STEP => {
             if (self.steps_remaining == 0) {
                 try self.notifyState(.IDLE);
-                continue :sm self.state;
+                return slot.delay(STEP_TIME);
+                // continue :sm self.state;
             }
 
             if (self.speed == 0) {
@@ -377,7 +378,9 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
             else
                 self.state = .MOVING;
 
-            continue :sm self.state;
+            return slot.delay(STEP_TIME);
+
+            // continue :sm self.state;
         },
 
         .MODE_SETUP => {
