@@ -21,7 +21,6 @@ pub const ScheduleSlot = struct {
     const Self = @This();
 
     now: time.Absolute = Now,
-    then: time.Absolute = Now,
     deadline: time.Absolute = Never,
     handler: *const TaskHandler = undefined,
     context: *anyopaque = undefined,
@@ -40,12 +39,11 @@ pub const ScheduleSlot = struct {
 
     pub fn delay(self: *Self, delay_us: u64) void {
         assert(self.deadline == Never);
-        self.deadline = self.then.add_duration(time.Duration.from_us(delay_us));
+        self.deadline = self.now.add_duration(time.Duration.from_us(delay_us));
     }
 
     pub fn pollWithHook(self: *Self, now: time.Absolute, hook: ?SchedulerHook) !bool {
         if (self.deadline.is_reached_by(now)) {
-            self.then = if (self.now == Now) now else self.now;
             self.now = now;
             self.deadline = Never;
             if (hook) |h| {
