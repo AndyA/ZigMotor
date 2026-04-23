@@ -128,9 +128,9 @@ pub fn main() !void {
     var controller = StepperController.init(.{
         .motor = &motor,
         .min_rpm = 10,
-        .max_rpm = 500,
-        .max_accel = 5000,
-        .max_decel = 5000,
+        .max_rpm = 1500,
+        .max_accel = 10000,
+        .max_decel = 10000,
     });
     controller.attach();
 
