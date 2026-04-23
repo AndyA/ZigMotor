@@ -1,6 +1,4 @@
-CREATE OR REPLACE TABLE digital AS
-from
-  'electronics/digital.csv';
+CREATE OR REPLACE TABLE digital AS from 'electronics/digital.csv';
 
 CREATE OR REPLACE VIEW step_edges AS
 SELECT
