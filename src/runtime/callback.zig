@@ -1,10 +1,10 @@
 pub const VoidCallback = struct {
     const Self = @This();
     context: *anyopaque,
-    handler: *const fn (ctx: *anyopaque) anyerror!void,
+    handler: *const fn (ctx: *anyopaque) void,
 
-    pub fn advise(self: Self) !void {
-        try self.handler(self.context);
+    pub fn advise(self: Self) void {
+        self.handler(self.context);
     }
 };
 
@@ -15,10 +15,10 @@ pub fn makeCallback(comptime PayloadType: type) type {
     return struct {
         const Self = @This();
         context: *anyopaque,
-        handler: *const fn (ctx: *anyopaque, state: PayloadType) anyerror!void,
+        handler: *const fn (ctx: *anyopaque, state: PayloadType) void,
 
-        pub fn advise(self: Self, state: PayloadType) !void {
-            try self.handler(self.context, state);
+        pub fn advise(self: Self, state: PayloadType) void {
+            self.handler(self.context, state);
         }
     };
 }

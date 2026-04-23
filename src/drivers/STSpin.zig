@@ -33,6 +33,7 @@ pub const Config = struct {
     mode2_pin: ?Pin = null,
     en_fault_pin: ?Pin = null,
     reset_pin: ?Pin = null,
+    debug_pin: ?Pin = null,
 };
 
 pub const State = enum(u8) {
@@ -47,6 +48,7 @@ pub const State = enum(u8) {
 
     MODE_SETUP,
     MODE_HOLD,
+    MODE_DONE,
 
     STOPPING,
 };
@@ -131,15 +133,8 @@ pub fn start(self: *Self, slot: *ScheduleSlot) !void {
     assert(self.state == .INIT);
     self.direction = .UNKNOWN;
 
-    // try self.config.dir_pin.set_direction(.output);
-    // try self.config.step_pin.set_direction(.output);
     self.config.dir_pin.put(1);
     self.config.step_pin.put(1);
-
-    // if (self.config.en_fault_pin) |fault_pin| {
-    //     try fault_pin.set_direction(.input);
-    //     try fault_pin.set_bias(1);
-    // }
 
     const pins = .{
         self.config.mode1_pin,
@@ -149,7 +144,6 @@ pub fn start(self: *Self, slot: *ScheduleSlot) !void {
 
     inline for (pins) |maybe_pin| {
         if (maybe_pin) |pin| {
-            // try pin.set_direction(.output);
             pin.put(1);
         }
     }
@@ -272,7 +266,15 @@ fn notifyState(self: *Self, state: State) !void {
     try self.state_ee.emit(.{ .target = self, .state = state });
 }
 
+fn debugFlag(self: Self, state: u1) void {
+    if (self.config.debug_pin) |debug|
+        debug.put(state);
+}
+
 fn rtNotify(self: *Self, now: time.Absolute) !void {
+    self.debugFlag(1);
+    defer self.debugFlag(0);
+
     try self.rt_ee.emit(.{
         .target = self,
         .state = self.state,
@@ -292,16 +294,19 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
         .IDLE => {
             if (self.microstep.pending != self.microstep.active) {
                 self.state = .MODE_SETUP;
-                continue :sm self.state;
-            }
-
-            if (self.steps_remaining != 0) {
-                try self.notifyState(.START);
-                continue :sm self.state;
+                return slot.delay(STEP_TIME);
+                // continue :sm self.state;
             }
 
             // Keep the RT notifications coming
             try self.rtNotify(slot.now);
+
+            if (self.steps_remaining != 0) {
+                try self.notifyState(.START);
+                return slot.delay(STEP_TIME);
+                // continue :sm self.state;
+            }
+
             slot.delay(IDLE_TIME);
         },
 
@@ -310,7 +315,6 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
             self.state = .MOVING;
             continue :sm self.state;
         },
-
         .MOVING => {
             // RT notify so speed, direction can be set before step starts
             try self.rtNotify(slot.now);
@@ -413,16 +417,23 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
 
             // Recalculate speed for the new microstep
             self.recalculateSpeed(self.speed);
-
             slot.delay(STEP_TIME);
         },
         .MODE_HOLD => {
             // set reset high
             // wait 100µS
             // go to .IDLE
-            self.state = .IDLE; // don't advise
+            self.state = .MODE_DONE; // don't advise
             self.config.reset_pin.?.put(1);
             slot.delay(MODE_HOLD_TIME);
+        },
+        .MODE_DONE => {
+            self.config.step_pin.put(0);
+            self.config.dir_pin.put(0);
+            self.config.mode1_pin.?.put(1);
+            self.config.mode2_pin.?.put(1);
+            self.state = .IDLE;
+            slot.delay(STEP_TIME);
         },
 
         .STOPPING => {

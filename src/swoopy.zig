@@ -74,11 +74,11 @@ const SchedulerMonitor = struct {
         return .{ .context = self, .handler = callback };
     }
 
-    fn callback(ctx: *anyopaque, state: sched.SchedulerState) !void {
+    fn callback(ctx: *anyopaque, state: sched.SchedulerState) void {
         const self: *Self = @ptrCast(@alignCast(ctx));
         switch (state) {
-            .IDLE => try self.indicator.on(),
-            .RUNNING => try self.indicator.off(),
+            .IDLE => self.indicator.on(),
+            .RUNNING => self.indicator.off(),
         }
     }
 };
@@ -96,8 +96,10 @@ const pin_config = hal.pins.GlobalConfiguration{
     .GPIO18 = .{ .name = "mode2", .direction = .out },
     .GPIO17 = .{ .name = "fault", .direction = .in, .pull = .up },
     .GPIO16 = .{ .name = "reset", .direction = .out },
+    .GPIO27 = .{ .name = "debug", .direction = .out },
 
     .GPIO25 = .{ .name = "led", .direction = .out },
+    .GPIO26 = .{ .name = "busy", .direction = .out },
 };
 
 pub fn main() !void {
@@ -105,10 +107,13 @@ pub fn main() !void {
     const pins = pin_config.apply();
     var scheduler: Scheduler = .empty;
 
-    var blue1 = Alert.init(pins.blue1);
-    blue1.schedule(scheduler.pri(-2));
+    const busy = Indicator.init(pins.busy);
+    busy.on();
+
     var red2 = Alert.init(pins.red2);
-    red2.schedule(scheduler.pri(-5));
+    red2.schedule(scheduler.pri(1));
+    var blue1 = Alert.init(pins.blue1);
+    blue1.schedule(scheduler.pri(2));
 
     var motor: STSpin = .init(.{
         .step_pin = pins.step,
@@ -117,6 +122,7 @@ pub fn main() !void {
         .en_fault_pin = pins.fault,
         .mode1_pin = pins.mode1,
         .mode2_pin = pins.mode2,
+        .debug_pin = pins.debug,
     });
 
     var controller = StepperController.init(.{
@@ -149,14 +155,12 @@ pub fn main() !void {
     try motor.start(scheduler.pri(0));
 
     var monitor: SchedulerMonitor = .{
-        .indicator = try Indicator.init(pins.led),
+        .indicator = busy,
     };
 
+    const hook = monitor.hook();
     while (true) {
-        _ = try scheduler.pollWithHook(
-            clock.microsecondsSinceBoot(),
-            monitor.hook(),
-        );
+        _ = try scheduler.pollWithHook(clock.microsecondsSinceBoot(), hook);
     }
 }
 

@@ -8,8 +8,8 @@ const events = @import("../runtime/events.zig");
 
 const Self = @This();
 
-const POLL_TIME = 1000; // poll every 1ms
-const DWELL_STEPS = 200; // light for 100ms
+const POLL_TIME = 20000; // poll every 20ms
+const DWELL_STEPS = 10; // light for 100ms
 
 pin: Pin,
 countdown: u32 = 0,

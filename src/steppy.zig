@@ -68,11 +68,11 @@ const SchedulerMonitor = struct {
         return .{ .context = self, .handler = callback };
     }
 
-    fn callback(ctx: *anyopaque, state: sched.SchedulerState) !void {
+    fn callback(ctx: *anyopaque, state: sched.SchedulerState) void {
         const self: *Self = @ptrCast(@alignCast(ctx));
         switch (state) {
-            .IDLE => try self.indicator.on(),
-            .RUNNING => try self.indicator.off(),
+            .IDLE => self.indicator.on(),
+            .RUNNING => self.indicator.off(),
         }
     }
 };
@@ -135,14 +135,12 @@ pub fn main() !void {
     try stepper.start(scheduler.pri(0));
 
     var monitor: SchedulerMonitor = .{
-        .indicator = try Indicator.init(pins.led),
+        .indicator = Indicator.init(pins.led),
     };
 
+    const hook = monitor.hook();
     while (true) {
-        _ = try scheduler.pollWithHook(
-            clock.microsecondsSinceBoot(),
-            monitor.hook(),
-        );
+        _ = try scheduler.pollWithHook(clock.microsecondsSinceBoot(), hook);
     }
 }
 

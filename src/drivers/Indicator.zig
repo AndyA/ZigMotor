@@ -10,15 +10,15 @@ const Self = @This();
 
 pin: Pin,
 
-pub fn init(pin: Pin) !Self {
+pub fn init(pin: Pin) Self {
     pin.put(0);
     return Self{ .pin = pin };
 }
 
-pub fn on(self: Self) !void {
+pub fn on(self: Self) void {
     self.pin.put(1);
 }
 
-pub fn off(self: Self) !void {
+pub fn off(self: Self) void {
     self.pin.put(0);
 }
