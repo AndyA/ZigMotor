@@ -3,6 +3,61 @@ const Allocator = std.mem.Allocator;
 
 const events = @import("../runtime/events.zig");
 
+pub const hal = struct {
+    pub const gpio = struct {
+        pub const Pin = struct {
+            const Self = @This();
+            const Driver = struct {
+                state: u1 = 0,
+            };
+
+            pub const Event = struct {
+                const Reason = enum { PUT, TOGGLE };
+                name: []const u8,
+                driver: Driver,
+                reason: Reason,
+            };
+
+            pub const Emitter = events.Emitter(Event, 2);
+
+            name: []const u8,
+            emitter: *Emitter,
+            driver: *Driver,
+
+            pub fn init(allocator: Allocator, name: []const u8, emitter: *Emitter) !Self {
+                return .{
+                    .name = try allocator.dupe(u8, name),
+                    .emitter = emitter,
+                    .driver = try allocator.create(Driver),
+                };
+            }
+
+            pub fn deinit(self: Self, allocator: Allocator) void {
+                allocator.free(self.name);
+                allocator.destroy(self.driver);
+            }
+
+            fn emit(self: Self, reason: Event.Reason) void {
+                self.emitter.emit(.{
+                    .name = self.name,
+                    .driver = self.driver.*,
+                    .reason = reason,
+                }) catch unreachable;
+            }
+
+            pub fn put(self: Self, state: u1) void {
+                self.driver.state = state;
+                self.emit(.PUT);
+            }
+
+            pub fn toggle(self: Self) void {
+                self.driver.state = ~self.driver.state;
+                self.emit(.TOGGLE);
+            }
+        };
+    };
+};
+
 pub const drivers = struct {
     pub const base = struct {
         pub const Digital_IO = struct {

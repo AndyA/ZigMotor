@@ -1,27 +1,24 @@
 const std = @import("std");
 const microzig = @import("microzig");
 const time = microzig.drivers.time;
-const Digital_IO = microzig.drivers.base.Digital_IO;
+const Pin = microzig.hal.gpio.Pin;
 
 const sched = @import("../runtime/scheduler.zig");
 const events = @import("../runtime/events.zig");
 
 const Self = @This();
 
-pin: Digital_IO,
+pin: Pin,
 
-state: Digital_IO.State = .low,
-
-pub fn init(pin: Digital_IO) !Self {
-    try pin.set_direction(.output);
-    try pin.write(.low);
+pub fn init(pin: Pin) !Self {
+    pin.put(0);
     return Self{ .pin = pin };
 }
 
 pub fn on(self: Self) !void {
-    try self.pin.write(.high);
+    self.pin.put(1);
 }
 
 pub fn off(self: Self) !void {
-    try self.pin.write(.low);
+    self.pin.put(0);
 }

@@ -3,7 +3,6 @@ const assert = std.debug.assert;
 
 const microzig = @import("microzig");
 const hal = microzig.hal;
-const GPIO_Device = hal.drivers.GPIO_Device;
 
 const sched = @import("runtime/scheduler.zig");
 const events = @import("runtime/events.zig");
@@ -31,10 +30,10 @@ const Sequencer = struct {
 
     pub const empty: Self = .{};
 
-    pub fn attach(self: *Self, controller: *StepperController) !void {
+    pub fn attach(self: *Self, controller: *StepperController) void {
         controller.attach();
         controller.ee.addListener(onStateChange, self);
-        try self.nextStep(controller);
+        self.nextStep(controller);
     }
 
     pub fn addSteps(self: *Self, steps: []const Step) void {
@@ -43,10 +42,10 @@ const Sequencer = struct {
         self.used += @intCast(steps.len);
     }
 
-    fn nextStep(self: *Self, controller: *StepperController) !void {
+    fn nextStep(self: *Self, controller: *StepperController) void {
         if (self.used == 0) return;
         if (self.alert) |alert|
-            try alert.activate();
+            alert.activate();
         const step = self.steps[self.current];
         controller.set(step.set_point);
         self.current += 1;
@@ -58,7 +57,7 @@ const Sequencer = struct {
         const self: *Self = @ptrCast(@alignCast(ctx));
         switch (e.state) {
             .STOPPED => {
-                try self.nextStep(e.target);
+                self.nextStep(e.target);
             },
             else => {},
         }
@@ -84,59 +83,40 @@ const SchedulerMonitor = struct {
     }
 };
 
+// Compile-time pin configuration
+const pin_config = hal.pins.GlobalConfiguration{
+    .GPIO12 = .{ .name = "blue1", .direction = .out },
+    .GPIO13 = .{ .name = "blue2", .direction = .out },
+    .GPIO14 = .{ .name = "red1", .direction = .out },
+    .GPIO15 = .{ .name = "red2", .direction = .out },
+
+    .GPIO21 = .{ .name = "dir", .direction = .out },
+    .GPIO20 = .{ .name = "step", .direction = .out },
+    .GPIO19 = .{ .name = "mode1", .direction = .out },
+    .GPIO18 = .{ .name = "mode2", .direction = .out },
+    .GPIO17 = .{ .name = "fault", .direction = .in, .pull = .up },
+    .GPIO16 = .{ .name = "reset", .direction = .out },
+
+    .GPIO25 = .{ .name = "led", .direction = .out },
+};
+
 pub fn main() !void {
+    @setEvalBranchQuota(std.math.maxInt(usize));
+    const pins = pin_config.apply();
     var scheduler: Scheduler = .empty;
 
-    var pins: struct {
-        blue1: GPIO_Device,
-        blue2: GPIO_Device,
-        red1: GPIO_Device,
-        red2: GPIO_Device,
-
-        dir: GPIO_Device,
-        step: GPIO_Device,
-        mode1: GPIO_Device,
-        mode2: GPIO_Device,
-        fault: GPIO_Device,
-        reset: GPIO_Device,
-
-        led: GPIO_Device,
-    } = undefined;
-
-    const gpio_numbers = .{
-        12, // blue 1
-        13, // blue 2
-        14, // red 1
-        15, // red 2
-
-        21, // dir
-        20, // step
-        19, // mode 1
-        18, // mode 2
-        17, // fault
-        16, // reset
-
-        25, // board led
-    };
-
-    inline for (std.meta.fields(@TypeOf(pins)), gpio_numbers) |field, num| {
-        const pin = hal.gpio.num(num);
-        pin.set_function(.sio);
-        @field(pins, field.name) = GPIO_Device.init(pin);
-    }
-
-    var blue1 = try Alert.init(pins.blue1.digital_io());
+    var blue1 = Alert.init(pins.blue1);
     blue1.schedule(scheduler.pri(-2));
-    var red2 = try Alert.init(pins.red2.digital_io());
+    var red2 = Alert.init(pins.red2);
     red2.schedule(scheduler.pri(-5));
 
     var motor: STSpin = .init(.{
-        .step_pin = pins.step.digital_io(),
-        .dir_pin = pins.dir.digital_io(),
-        .reset_pin = pins.reset.digital_io(),
-        .en_fault_pin = pins.fault.digital_io(),
-        .mode1_pin = pins.mode1.digital_io(),
-        .mode2_pin = pins.mode2.digital_io(),
+        .step_pin = pins.step,
+        .dir_pin = pins.dir,
+        .reset_pin = pins.reset,
+        .en_fault_pin = pins.fault,
+        .mode1_pin = pins.mode1,
+        .mode2_pin = pins.mode2,
     });
 
     var controller = StepperController.init(.{
@@ -159,17 +139,17 @@ pub fn main() !void {
         .{ .set_point = -25600 },
     };
 
-    try blue1.activate();
+    blue1.activate();
 
     var sequencer: Sequencer = .{ .alert = &red2 };
     sequencer.addSteps(steps);
-    try sequencer.attach(&controller);
+    sequencer.attach(&controller);
 
-    try motor.setMicrostep(16);
+    motor.setMicrostep(16);
     try motor.start(scheduler.pri(0));
 
     var monitor: SchedulerMonitor = .{
-        .indicator = try Indicator.init(pins.led.digital_io()),
+        .indicator = try Indicator.init(pins.led),
     };
 
     while (true) {
