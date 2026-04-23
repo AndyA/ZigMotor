@@ -54,6 +54,7 @@ pub const StepperController = struct {
     // Cached values to avoid FP division
     recip_max_decel: f32 = undefined,
     revs_per_step: f32 = undefined,
+    stop_decel_squared: f32 = undefined,
 
     fn checkConfig(config: Config) void {
         assert(config.max_accel > 0);
@@ -70,6 +71,7 @@ pub const StepperController = struct {
     fn updatedCached(self: *Self) void {
         self.recip_max_decel = 1 / (2 * self.config.max_decel);
         self.revs_per_step = 1 / self.config.motor.floatStepsPerRevolution();
+        self.stop_decel_squared = square(self.config.min_rpm - MIN_RPM_ADJ);
     }
 
     pub fn setConfig(self: *Self, config: PartialConfig) void {
@@ -133,8 +135,8 @@ pub const StepperController = struct {
         }
 
         // Minutes because our accel / decel are in rpm/m
-        const elapsed: f32 = @as(f32, @floatFromInt(now.diff(self.last_tick).to_us())) /
-            1_000_000 / 60;
+        const elapsed: f32 = @as(f32, @floatFromInt(now.diff(self.last_tick).to_us())) *
+            (@as(f32, 1) / @as(f32, 60_000_000));
         self.last_tick = now;
 
         const c = self.config;
@@ -173,8 +175,7 @@ pub const StepperController = struct {
         // How far will we travel before we can stop? We aim for MIN_RPM_ADJ slower than
         // we need to avoid overshoot. I don't fully understand the overshoot but I assume
         // it's caused be the cummulative errors in computed speed / actual speed. Shrug.
-        const stop_dist = self.recip_max_decel *
-            (square(m.speed) - square(self.config.min_rpm - MIN_RPM_ADJ));
+        const stop_dist = self.recip_max_decel * (square(m.speed) - self.stop_decel_squared);
 
         // print(
         //     "speed: {d}, error: {d}, dir: {d}, dest_dist: {d}, stop_dist: {d}, ",
