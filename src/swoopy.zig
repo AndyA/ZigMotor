@@ -129,20 +129,30 @@ pub fn main() !void {
         .motor = &motor,
         .min_rpm = 10,
         .max_rpm = 1500,
-        .max_accel = 10000,
-        .max_decel = 10000,
+        .max_accel = 20000,
+        .max_decel = 20000,
     });
     controller.attach();
 
+    const STEPS_PER_REVOLUTION = 200;
+    const MICROSTEP = 1;
+
+    // microsteps per revolution
+    const USPR = STEPS_PER_REVOLUTION * MICROSTEP;
+
     const steps = &[_]Sequencer.Step{
-        .{ .set_point = 3200 },
-        .{ .set_point = -3200 },
-        .{ .set_point = 6400 },
-        .{ .set_point = -6400 },
-        .{ .set_point = 12800 },
-        .{ .set_point = -12800 },
-        .{ .set_point = 25600 },
-        .{ .set_point = -25600 },
+        .{ .set_point = USPR * 1 },
+        .{ .set_point = -USPR * 1 },
+        .{ .set_point = USPR * 2 },
+        .{ .set_point = -USPR * 2 },
+        .{ .set_point = USPR * 4 },
+        .{ .set_point = -USPR * 4 },
+        .{ .set_point = USPR * 8 },
+        .{ .set_point = -USPR * 8 },
+        .{ .set_point = USPR * 16 },
+        .{ .set_point = -USPR * 16 },
+        .{ .set_point = USPR * 32 },
+        .{ .set_point = -USPR * 32 },
     };
 
     blue1.activate();
@@ -151,7 +161,7 @@ pub fn main() !void {
     sequencer.addSteps(steps);
     sequencer.attach(&controller);
 
-    motor.setMicrostep(16);
+    motor.setMicrostep(MICROSTEP);
     try motor.start(scheduler.pri(0));
 
     var monitor: SchedulerMonitor = .{
