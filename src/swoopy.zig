@@ -129,13 +129,13 @@ pub fn main() !void {
         .motor = &motor,
         .min_rpm = 10,
         .max_rpm = 1500,
-        .max_accel = 20000,
-        .max_decel = 20000,
+        .max_accel = 50000,
+        .max_decel = 50000,
     });
     controller.attach();
 
     const STEPS_PER_REVOLUTION = 200;
-    const MICROSTEP = 1;
+    const MICROSTEP = 4;
 
     // microsteps per revolution
     const USPR = STEPS_PER_REVOLUTION * MICROSTEP;
