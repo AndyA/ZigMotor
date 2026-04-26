@@ -46,7 +46,8 @@ pub fn main(init: std.process.Init) !void {
     while (controller.state == .MOVING) {
         try runner.advance();
         // runner.printLog();
-        print("time: {d}, controller: {s}, speed: {d}/{d}, µS/step: {d} position: {d}, direction: {s}\n", .{
+        print("time: {d}, controller: {s}, speed: {d}/{d}, µS/step: {d} " ++
+            "position: {d}, direction: {s}\n", .{
             runner.slot.now.to_us(),
             @tagName(controller.state),
             motor.speed,
