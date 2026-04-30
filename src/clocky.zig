@@ -23,7 +23,7 @@ pub fn main() !void {
     const digits = [_]Pin{ pins.bit0, pins.bit1, pins.bit2, pins.bit3 };
 
     while (true) {
-        const now: u64 = clock.microsecondsSinceBoot().to_us() / 1_000_000;
+        const now: u64 = clock.microsecondsSinceBoot().to_us() / 2_000_000;
         inline for (digits, 0..) |dio, bit| {
             dio.put(bitState(now, @intCast(bit)));
         }

@@ -29,6 +29,7 @@ pub fn build(b: *std.Build) void {
         });
 
         mb.install_firmware(fw, .{});
+        mb.install_firmware(fw, .{ .format = .elf });
     }
 
     const mule = b.addExecutable(.{
