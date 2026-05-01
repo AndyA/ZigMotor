@@ -22,8 +22,8 @@ pub const IDLE_TIME = 100; // µS
 // We assert STEP for up to two ticks. If we used one tick we might
 // sometimes get a much shorter delay due to scheduler granularity.
 // We only actually need 100ns
-pub const STEP_TIME = clock.US_PER_TICK * 2; // µS
-pub const MODE_HOLD_TIME = 100 + clock.US_PER_TICK; // µS
+pub const STEP_TIME = 2; // µS
+pub const MODE_HOLD_TIME = 101; // µS
 
 pub const Config = struct {
     steps_per_revolution: u16 = 200,

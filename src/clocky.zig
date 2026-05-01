@@ -11,10 +11,10 @@ fn bitState(v: u64, bit: u6) u1 {
 
 // Compile-time pin configuration
 const pin_config = hal.pins.GlobalConfiguration{
-    .GPIO12 = .{ .name = "bit0", .direction = .out },
-    .GPIO13 = .{ .name = "bit1", .direction = .out },
-    .GPIO14 = .{ .name = "bit2", .direction = .out },
-    .GPIO15 = .{ .name = "bit3", .direction = .out },
+    .GPIO12 = .{ .name = "bit3", .direction = .out },
+    .GPIO13 = .{ .name = "bit2", .direction = .out },
+    .GPIO14 = .{ .name = "bit1", .direction = .out },
+    .GPIO15 = .{ .name = "bit0", .direction = .out },
 };
 
 pub fn main() !void {
@@ -23,7 +23,7 @@ pub fn main() !void {
     const digits = [_]Pin{ pins.bit0, pins.bit1, pins.bit2, pins.bit3 };
 
     while (true) {
-        const now: u64 = clock.microsecondsSinceBoot().to_us() / 2_000_000;
+        const now: u64 = clock.microsecondsSinceBoot().to_us() / 1_000_000;
         inline for (digits, 0..) |dio, bit| {
             dio.put(bitState(now, @intCast(bit)));
         }
