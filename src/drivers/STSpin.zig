@@ -286,6 +286,11 @@ fn bitSet(bits: u4, pos: u2) u1 {
     return if ((bits & (@as(u4, 1) << pos)) != 0) 1 else 0;
 }
 
+fn delay(slot: *ScheduleSlot, delay_us: u64) void {
+    const now = hal.time.get_time_since_boot();
+    slot.delayTo(now.add_duration(delay_us));
+}
+
 fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
     const self: *Self = @ptrCast(@alignCast(ctx));
 
@@ -431,10 +436,10 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
             slot.delay(MODE_HOLD_TIME);
         },
         .MODE_DONE => {
-            self.config.step_pin.put(0);
-            self.config.dir_pin.put(0);
             self.config.mode1_pin.?.put(1);
             self.config.mode2_pin.?.put(1);
+            self.config.step_pin.put(0);
+            self.config.dir_pin.put(0);
             self.state = .IDLE;
             slot.delay(STEP_TIME);
         },

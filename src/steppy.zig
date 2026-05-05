@@ -114,6 +114,7 @@ pub fn main() !void {
         .mode1_pin = pins.mode1,
         .mode2_pin = pins.mode2,
     });
+    stepper.setMicrostep(4);
 
     const steps = &[_]Sequencer.Step{
         .{ .speed = 60.00, .steps = 400 }, // M0 / M8
