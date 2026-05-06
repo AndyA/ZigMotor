@@ -233,21 +233,21 @@ pub fn setMicrostep(self: *Self, microstep: u16) void {
 //  0  0  1  1 1/256th step
 //  1  0  0  1 1/256th step
 //  0  1  1  0 1/256th step
-//  1  0  0  0 Full-step - 1/32nd step (1)
-//  0  1  0  0 Full-step - 1/128nd step (1)
-//  1  1  0  0 Full-step - 1/256th step (1)
+//  1  0  0  0 Full-step - 1/32nd step
+//  0  1  0  0 Full-step - 1/128nd step
+//  1  1  0  0 Full-step - 1/256th step
 
 fn lookupMicrostep(microstep: u16) u4 {
     return switch (microstep) {
-        1 => 0b0000,
+        1 => 0b0000, // also 0b1000, 0b0100, 0b1100
         2 => 0b0101,
         4 => 0b1010,
-        8 => 0b0111,
+        8 => 0b0111, // also 0b1101
         16 => 0b1111,
         32 => 0b0010,
-        64 => 0b1011,
+        64 => 0b1011, // also 0b1110
         128 => 0b0001,
-        256 => 0b0011,
+        256 => 0b0011, // also 0b1001, 0b0110
         else => unreachable,
     };
 }
