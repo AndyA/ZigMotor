@@ -93,6 +93,15 @@ microstep: struct {
         assert(self.pending != 0);
         return self.pending;
     }
+
+    pub fn commit(self: *@This()) void {
+        self.active = self.pending;
+        self.current = self.pending;
+    }
+
+    pub fn dirty(self: @This()) bool {
+        return self.active != self.pending;
+    }
 } = .{},
 
 direction: Direction = .UNKNOWN,
@@ -278,18 +287,13 @@ fn bitSet(bits: u4, pos: u2) u1 {
     return if ((bits & (@as(u4, 1) << pos)) != 0) 1 else 0;
 }
 
-fn delay(slot: *ScheduleSlot, delay_us: u64) void {
-    const now = hal.time.get_time_since_boot();
-    slot.delayTo(now.add_duration(delay_us));
-}
-
 fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
     const self: *Self = @ptrCast(@alignCast(ctx));
 
     sm: switch (self.state) {
         .INIT => unreachable,
         .IDLE => {
-            if (self.microstep.pending != self.microstep.active) {
+            if (self.microstep.dirty()) {
                 self.state = .MODE_SETUP;
                 continue :sm self.state;
             }
@@ -376,8 +380,8 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
         },
 
         .MODE_SETUP => {
+            assert(self.microstep.dirty());
             const pending = self.microstep.pending;
-            assert(pending != self.microstep.active);
             if (pending == 1 or pending == self.microstep.current) {
                 // just diddle the mode bits and wait a bit
                 if (pending == 1) {
@@ -389,7 +393,6 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
                 }
 
                 self.microstep.active = pending;
-
                 self.state = .IDLE; // don't advise
             } else {
                 // need to change mode
@@ -404,9 +407,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
                 self.config.step_pin.put(bitSet(bits, 2));
                 self.config.dir_pin.put(bitSet(bits, 3));
 
-                self.microstep.active = pending;
-                self.microstep.current = pending;
-
+                self.microstep.commit();
                 self.state = .MODE_HOLD;
             }
 
@@ -417,7 +418,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
         .MODE_HOLD => {
             // set reset high
             // wait 100µS
-            // go to .IDLE
+            // go to .MODE_DONE
             self.state = .MODE_DONE; // don't advise
             self.config.reset_pin.?.put(1);
             slot.delay(MODE_HOLD_TIME);
