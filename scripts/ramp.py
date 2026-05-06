@@ -1,48 +1,69 @@
+import math
 from dataclasses import dataclass
+from functools import cached_property
 
 
 @dataclass(frozen=True, kw_only=True)
 class Step:
-    speed: int
+    speed: float
     steps: int
 
     def __str__(self) -> str:
-        return f".{{ .speed = {self.speed}, .steps = {self.steps} }}"
+        return (
+            f".{{ .speed = {int(self.norm.speed * 100)}, .steps = {self.norm.steps} }}"
+        )
+
+    @cached_property
+    def norm(self) -> "Step":
+        return Step(
+            speed=abs(self.speed),
+            steps=int(math.copysign(1, self.speed) * self.steps),
+        )
+
+    @property
+    def reversed(self) -> "Step":
+        return Step(speed=self.speed, steps=-self.steps)
+
+    @classmethod
+    def for_time(cls, speed: float, time: float) -> "Step":
+        return cls(speed=speed, steps=int(speed * time))
 
 
 def make_ramp(
     start: float, end: float, rate: float, *, max_rate: float = 1e20
-) -> list[int]:
+) -> list[float]:
     speed = start
     speeds = []
     while speed < end:
-        speeds.append(int(speed * 100))
+        speeds.append(speed)
         speed += min(max_rate, rate / speed)
     return speeds
 
 
 def make_hump(
-    ramp: list[int],
+    ramp: list[float],
     *,
-    steps_per_speed: int = 10,
-    steps_per_reverse: int = 100,
     direction: int = 1,
+    step_time: float = 0.01,
+    hang_time: float = 10,
 ) -> list[Step]:
     [peak, *rest] = reversed(ramp)
     return (
         [
-            Step(speed=speed, steps=steps_per_speed * direction)
+            Step.for_time(speed=speed * direction, time=step_time)
             for speed in reversed(rest)
         ]
-        + [Step(speed=peak, steps=steps_per_reverse * direction)]
-        + [Step(speed=speed, steps=steps_per_speed * direction) for speed in rest]
+        + [Step.for_time(speed=peak * direction, time=hang_time)]
+        + [Step.for_time(speed=speed * direction, time=step_time) for speed in rest]
     )
 
 
-ramp = make_ramp(10, 1000, 5000, max_rate=10)
-hump = make_hump(ramp, steps_per_reverse=10000, steps_per_speed=200) + make_hump(
-    ramp, direction=-1, steps_per_reverse=10000, steps_per_speed=200
-)
+def reverse_hump(hump: list[Step]) -> list[Step]:
+    return [step.reversed for step in reversed(hump)]
 
-for step in hump:
+
+ramp = make_ramp(10, 1000, 5000, max_rate=10)
+hump = make_hump(ramp, step_time=1, hang_time=10)
+
+for step in hump + reverse_hump(hump):
     print(f"{step},")
