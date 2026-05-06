@@ -39,9 +39,9 @@ def make_hump(
     )
 
 
-ramp = make_ramp(10, 1200, 2000, max_rate=10)
-hump = make_hump(ramp, steps_per_reverse=1000) + make_hump(
-    ramp, direction=-1, steps_per_reverse=1000
+ramp = make_ramp(10, 6000, 10000, max_rate=10)
+hump = make_hump(ramp, steps_per_reverse=10000, steps_per_speed=50) + make_hump(
+    ramp, direction=-1, steps_per_reverse=10000, steps_per_speed=50
 )
 
 for step in hump:
