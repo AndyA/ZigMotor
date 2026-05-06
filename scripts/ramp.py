@@ -10,12 +10,14 @@ class Step:
         return f".{{ .speed = {self.speed}, .steps = {self.steps} }}"
 
 
-def make_ramp(start: float, end: float, rate: float) -> list[int]:
+def make_ramp(
+    start: float, end: float, rate: float, *, max_rate: float = 1e20
+) -> list[int]:
     speed = start
     speeds = []
     while speed < end:
         speeds.append(int(speed * 100))
-        speed += rate / speed
+        speed += min(max_rate, rate / speed)
     return speeds
 
 
@@ -37,8 +39,10 @@ def make_hump(
     )
 
 
-ramp = make_ramp(10, 600, 1000)
-hump = make_hump(ramp) + make_hump(ramp, direction=-1)
+ramp = make_ramp(10, 1200, 1000, max_rate=10)
+hump = make_hump(ramp, steps_per_reverse=1000) + make_hump(
+    ramp, direction=-10, steps_per_reverse=1000
+)
 
 for step in hump:
     print(f"{step},")
