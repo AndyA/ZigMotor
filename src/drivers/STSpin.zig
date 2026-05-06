@@ -185,7 +185,8 @@ pub fn setRemaining(self: *Self, steps: i32) void {
 }
 
 pub fn stepsPerRevolution(self: Self) u32 {
-    return self.config.steps_per_revolution * self.microstep.activeOrPending();
+    return self.config.steps_per_revolution *
+        self.microstep.activeOrPending();
 }
 
 fn calculateSpeed(self: *Self, rpm: u32) u32 {
@@ -197,14 +198,14 @@ fn calculateSpeed(self: *Self, rpm: u32) u32 {
         (rpm * self.stepsPerRevolution())) * SCALE;
 }
 
-fn recalculateSpeed(self: *Self, rpm: u32) void {
-    self.us_per_step = @max(STEP_TIME * 2, self.calculateSpeed(rpm));
+fn recalculateSpeed(self: *Self) void {
+    self.us_per_step = @max(STEP_TIME * 2, self.calculateSpeed(self.speed));
 }
 
 pub fn setSpeed(self: *Self, rpm: u32) void {
     if (rpm != self.speed) {
-        self.recalculateSpeed(rpm);
         self.speed = rpm;
+        self.recalculateSpeed();
     }
 }
 
@@ -410,7 +411,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
             }
 
             // Recalculate speed for the new microstep
-            self.recalculateSpeed(self.speed);
+            self.recalculateSpeed();
             slot.delay(STEP_TIME);
         },
         .MODE_HOLD => {

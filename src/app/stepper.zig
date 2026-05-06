@@ -16,13 +16,6 @@ fn square(v: f32) f32 {
 pub const StepperController = struct {
     const Self = @This();
 
-    const Plan = struct {
-        decay: u32,
-        attack: u32,
-        sustain: u32,
-        release: u32,
-    };
-
     const MIN_RPM_ADJ: f32 = 5;
 
     pub const Config = struct {
