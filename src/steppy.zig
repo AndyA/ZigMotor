@@ -120,14 +120,18 @@ pub fn main() !void {
     const rev_steps: i32 = @intCast(stepper.stepsPerRevolution());
 
     const steps = &[_]Sequencer.Step{
-        .{ .speed = 60_00, .steps = rev_steps * 1 }, // M0 / M8
-        .{ .speed = 120_00, .steps = -rev_steps * 2 }, // M1
-        .{ .speed = 240_00, .steps = rev_steps * 4 }, // M2
-        .{ .speed = 480_00, .steps = -rev_steps * 8 }, // M3 unstable after this
-        .{ .speed = 960_00, .steps = rev_steps * 16 }, // M4
-        .{ .speed = 1920_00, .steps = -rev_steps * 32 }, // M5 can't do these
-        .{ .speed = 3840_00, .steps = rev_steps * 64 }, // M6
-        .{ .speed = 7680_00, .steps = -rev_steps * 128 }, // M7
+        .{ .speed = 3_75, .steps = @divTrunc(rev_steps, 16) },
+        .{ .speed = 7_50, .steps = -@divTrunc(rev_steps, 8) },
+        .{ .speed = 15_00, .steps = @divTrunc(rev_steps, 4) },
+        .{ .speed = 30_00, .steps = -@divTrunc(rev_steps, 2) },
+        .{ .speed = 60_00, .steps = rev_steps * 1 },
+        .{ .speed = 120_00, .steps = -rev_steps * 2 },
+        .{ .speed = 240_00, .steps = rev_steps * 4 },
+        // .{ .speed = 480_00, .steps = -rev_steps * 8 },
+        // .{ .speed = 960_00, .steps = rev_steps * 16 },
+        // .{ .speed = 1920_00, .steps = -rev_steps * 32 },
+        // .{ .speed = 3840_00, .steps = rev_steps * 64 },
+        // .{ .speed = 7680_00, .steps = -rev_steps * 128 },
     };
 
     blue1.activate();
