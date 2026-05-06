@@ -289,6 +289,7 @@ fn bitSet(bits: u4, pos: u2) u1 {
 
 fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
     const self: *Self = @ptrCast(@alignCast(ctx));
+    const c = self.config;
 
     sm: switch (self.state) {
         .INIT => unreachable,
@@ -331,7 +332,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
 
             self.direction = new_direction;
 
-            self.config.dir_pin.put(switch (new_direction) {
+            c.dir_pin.put(switch (new_direction) {
                 .CW => 1,
                 .CCW => 0,
                 else => unreachable,
@@ -350,13 +351,13 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
                 self.state = .MOVING;
                 slot.delay(IDLE_TIME);
             } else {
-                self.config.step_pin.put(1);
+                c.step_pin.put(1);
                 self.state = .STEPPING;
                 slot.delay(STEP_TIME);
             }
         },
         .STEPPING => {
-            self.config.step_pin.put(0);
+            c.step_pin.put(0);
 
             self.state = .STEPPED;
             slot.delay(self.us_per_step - STEP_TIME);
@@ -385,11 +386,11 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
             if (pending == 1 or pending == self.microstep.current) {
                 // just diddle the mode bits and wait a bit
                 if (pending == 1) {
-                    self.config.mode1_pin.?.put(0);
-                    self.config.mode2_pin.?.put(0);
+                    c.mode1_pin.?.put(0);
+                    c.mode2_pin.?.put(0);
                 } else {
-                    self.config.mode1_pin.?.put(1);
-                    self.config.mode2_pin.?.put(1);
+                    c.mode1_pin.?.put(1);
+                    c.mode2_pin.?.put(1);
                 }
 
                 self.microstep.active = pending;
@@ -400,12 +401,12 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
                 // set mode bits
                 // wait 1µS
                 // go to .MODE_HOLD
-                self.config.reset_pin.?.put(0);
+                c.reset_pin.?.put(0);
                 const bits = lookupMicrostep(pending);
-                self.config.mode1_pin.?.put(bitSet(bits, 0));
-                self.config.mode2_pin.?.put(bitSet(bits, 1));
-                self.config.step_pin.put(bitSet(bits, 2));
-                self.config.dir_pin.put(bitSet(bits, 3));
+                c.mode1_pin.?.put(bitSet(bits, 0));
+                c.mode2_pin.?.put(bitSet(bits, 1));
+                c.step_pin.put(bitSet(bits, 2));
+                c.dir_pin.put(bitSet(bits, 3));
 
                 self.microstep.commit();
                 self.state = .MODE_HOLD;
@@ -420,20 +421,20 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
             // wait 100µS
             // go to .MODE_DONE
             self.state = .MODE_DONE; // don't advise
-            self.config.reset_pin.?.put(1);
+            c.reset_pin.?.put(1);
             slot.delay(MODE_HOLD_TIME);
         },
         .MODE_DONE => {
-            self.config.mode1_pin.?.put(1);
-            self.config.mode2_pin.?.put(1);
-            self.config.step_pin.put(0);
-            self.config.dir_pin.put(0);
+            c.mode1_pin.?.put(1);
+            c.mode2_pin.?.put(1);
+            c.step_pin.put(0);
+            c.dir_pin.put(0);
             self.state = .IDLE;
             slot.delay(STEP_TIME);
         },
 
         .STOPPING => {
-            if (self.config.reset_pin) |reset_pin|
+            if (c.reset_pin) |reset_pin|
                 reset_pin.put(0);
             try self.notifyState(.INIT);
             // don't reschedule
