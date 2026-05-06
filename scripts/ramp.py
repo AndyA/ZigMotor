@@ -44,18 +44,14 @@ def make_ramp(start: float, end: float, rate: float) -> list[float]:
 def make_hump(
     ramp: list[float],
     *,
-    direction: int = 1,
     step_time: float = 0.002,
     hang_time: float = 10,
 ) -> list[Step]:
     [peak, *rest] = reversed(ramp)
     return (
-        [
-            Step.for_time(speed=speed * direction, time=step_time)
-            for speed in reversed(rest)
-        ]
-        + [Step.for_time(speed=peak * direction, time=hang_time)]
-        + [Step.for_time(speed=speed * direction, time=step_time) for speed in rest]
+        [Step.for_time(speed=speed, time=step_time) for speed in reversed(rest)]
+        + [Step.for_time(speed=peak, time=hang_time)]
+        + [Step.for_time(speed=speed, time=step_time) for speed in rest]
     )
 
 
