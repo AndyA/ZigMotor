@@ -196,6 +196,7 @@ fn recalculateSpeed(self: *Self, rpm: f32) void {
     assert(rpm >= 0);
 
     if (rpm != 0) {
+        @setFloatMode(.optimized);
         const spm = self.floatStepsPerRevolution() * rpm;
         self.us_per_step = @intFromFloat(@max(
             @as(f32, STEP_TIME),
@@ -218,6 +219,7 @@ pub fn setSpeed(self: *Self, rpm: f32) void {
 pub fn getActualSpeed(self: Self) f32 {
     if (self.speed == 0)
         return 0;
+    @setFloatMode(.optimized);
     return (1_000_000 * 60) /
         (@as(f32, @floatFromInt(self.us_per_step)) * self.floatStepsPerRevolution());
 }
@@ -299,8 +301,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
         .IDLE => {
             if (self.microstep.pending != self.microstep.active) {
                 self.state = .MODE_SETUP;
-                return slot.delay(STEP_TIME);
-                // continue :sm self.state;
+                continue :sm self.state;
             }
 
             // Keep the RT notifications coming
@@ -308,8 +309,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
 
             if (self.steps_remaining != 0) {
                 try self.notifyState(.START);
-                return slot.delay(STEP_TIME);
-                // continue :sm self.state;
+                continue :sm self.state;
             }
 
             slot.delay(IDLE_TIME);
@@ -348,8 +348,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
         .STEP => {
             if (self.steps_remaining == 0) {
                 try self.notifyState(.IDLE);
-                return slot.delay(STEP_TIME);
-                // continue :sm self.state;
+                continue :sm self.state;
             }
 
             if (self.speed == 0) {
@@ -383,9 +382,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
             else
                 self.state = .MOVING;
 
-            return slot.delay(STEP_TIME);
-
-            // continue :sm self.state;
+            continue :sm self.state;
         },
 
         .MODE_SETUP => {

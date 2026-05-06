@@ -135,6 +135,8 @@ pub const StepperController = struct {
     }
 
     fn tick(self: *Self, now: time.Absolute) !void {
+        @setFloatMode(.optimized);
+
         if (self.last_tick == time.Absolute.from_us(0)) {
             // Seed so that elapsed will be sane.
             self.last_tick = now;
