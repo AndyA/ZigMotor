@@ -83,9 +83,9 @@ config: Config,
 state: State = .INIT,
 
 microstep: struct {
-    active: u16 = 16, // what the state machine observes
+    active: u16 = 0, // what the state machine observes
     pending: u16 = 16, // desired; switch at next idle
-    current: u16 = 16, // current hardware setting when no full-step override
+    current: u16 = 0, // current hardware setting when no full-step override
 
     pub fn activeOrPending(self: @This()) u16 {
         if (self.active != 0)
@@ -97,8 +97,8 @@ microstep: struct {
 
 direction: Direction = .UNKNOWN,
 
-/// Current speed in RPM
-speed: f32 = 0,
+/// Current speed in RPM*100
+speed: u32 = 0,
 
 /// Number of steps still to perform
 steps_remaining: i32 = 0,
@@ -170,7 +170,7 @@ pub fn canSetMicrostep(self: Self) bool {
 pub fn stop(self: *Self) void {
     if (self.state != .INIT) {
         self.state = .STOPPING;
-        self.setSpeed(0);
+        self.setSpeedFloat(0);
         self.steps_remaining = 0;
         self.phase = 0;
     }
@@ -188,40 +188,29 @@ pub fn stepsPerRevolution(self: Self) u32 {
     return self.config.steps_per_revolution * self.microstep.activeOrPending();
 }
 
-pub fn floatStepsPerRevolution(self: Self) f32 {
-    return @floatFromInt(self.stepsPerRevolution());
+fn calculateSpeed(self: *Self, rpm: u32) u32 {
+    if (rpm == 0)
+        return 0;
+
+    const SCALE = 2;
+    return ((1_000_000 * 60 * 100 / SCALE) /
+        (rpm * self.stepsPerRevolution())) * SCALE;
 }
 
-fn recalculateSpeed(self: *Self, rpm: f32) void {
-    assert(rpm >= 0);
-
-    if (rpm != 0) {
-        @setFloatMode(.optimized);
-        const spm = self.floatStepsPerRevolution() * rpm;
-        self.us_per_step = @intFromFloat(@max(
-            @as(f32, STEP_TIME),
-            @round(1_000_000 * 60 / spm),
-        ));
-    } else {
-        self.us_per_step = 0; // means disabled
-    }
+fn recalculateSpeed(self: *Self, rpm: u32) void {
+    self.us_per_step = @max(STEP_TIME * 2, self.calculateSpeed(rpm));
 }
 
-// Set the speed in RPM
-pub fn setSpeed(self: *Self, rpm: f32) void {
+pub fn setSpeed(self: *Self, rpm: u32) void {
     if (rpm != self.speed) {
         self.recalculateSpeed(rpm);
         self.speed = rpm;
     }
 }
 
-// Get the computed speed based on us_per_step
-pub fn getActualSpeed(self: Self) f32 {
-    if (self.speed == 0)
-        return 0;
-    @setFloatMode(.optimized);
-    return (1_000_000 * 60) /
-        (@as(f32, @floatFromInt(self.us_per_step)) * self.floatStepsPerRevolution());
+// Set the speed in RPM
+pub fn setSpeedFloat(self: *Self, rpm: f32) void {
+    self.setSpeed(@intFromFloat(rpm * 100));
 }
 
 pub fn setMicrostep(self: *Self, microstep: u16) void {
@@ -587,7 +576,7 @@ test STSpin {
     // try runner.advance();
     // try expectEqual(.IDLE, stepper.state);
 
-    stepper.setSpeed(60);
+    stepper.setSpeedFloat(60);
     // print("µS/step = {d}\n", .{stepper.us_per_step});
     // stepper.setMicrostep(8);
     stepper.rotate(2);

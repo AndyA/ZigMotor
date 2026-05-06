@@ -77,7 +77,7 @@ pub const StepperController = struct {
 
     fn updatedCached(self: *Self) void {
         self.recip_max_decel = 1 / (2 * self.config.max_decel);
-        self.revs_per_step = 1 / self.config.motor.floatStepsPerRevolution();
+        self.revs_per_step = 1 / @as(f32, @floatFromInt(self.config.motor.stepsPerRevolution()));
         self.stop_decel_squared = square(self.config.min_rpm - MIN_RPM_ADJ);
     }
 
@@ -162,7 +162,9 @@ pub const StepperController = struct {
             .STOP => 0,
         };
 
-        if (pos_error == 0 and m.speed <= c.min_rpm) {
+        const speed = @as(f32, @floatFromInt(m.speed)) / 100;
+
+        if (pos_error == 0 and speed <= c.min_rpm) {
             // We've arrived
             try self.stopMotor();
             return;
@@ -184,7 +186,7 @@ pub const StepperController = struct {
         // How far will we travel before we can stop? We aim for MIN_RPM_ADJ slower than
         // we need to avoid overshoot. I don't fully understand the overshoot but I assume
         // it's caused be the cummulative errors in computed speed / actual speed. Shrug.
-        const stop_dist = self.recip_max_decel * (square(m.speed) - self.stop_decel_squared);
+        const stop_dist = self.recip_max_decel * (square(speed) - self.stop_decel_squared);
 
         // print(
         //     "speed: {d}, error: {d}, dir: {d}, dest_dist: {d}, stop_dist: {d}, ",
@@ -193,9 +195,9 @@ pub const StepperController = struct {
 
         if (dest_dist <= stop_dist) {
             // Brake!
-            m.setSpeed(@max(c.min_rpm, m.speed - c.max_decel * elapsed));
+            m.setSpeedFloat(@max(c.min_rpm, speed - c.max_decel * elapsed));
             // Do we need to reverse or stop?
-            if (m.speed <= c.min_rpm and std.math.sign(pos_error) != std.math.sign(dir))
+            if (speed <= c.min_rpm and std.math.sign(pos_error) != std.math.sign(dir))
                 m.setRemaining(-dir * 2)
             else
                 m.setRemaining(dir * 2);
@@ -203,7 +205,7 @@ pub const StepperController = struct {
             // print("brake: {d}\n", .{m.steps_remaining});
         } else {
             // Accelerate!
-            m.setSpeed(@max(c.min_rpm, @min(c.max_rpm, m.speed + c.max_accel * elapsed)));
+            m.setSpeedFloat(@max(c.min_rpm, @min(c.max_rpm, speed + c.max_accel * elapsed)));
             m.setRemaining(@as(i32, @intCast(std.math.sign(pos_error))) * 2);
             // print("accelerate: {d}\n", .{m.steps_remaining});
         }

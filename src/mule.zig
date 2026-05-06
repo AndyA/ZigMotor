@@ -1,6 +1,7 @@
 const std = @import("std");
 const Io = std.Io;
 const print = std.debug.print;
+const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 
 const microzig = @import("testing/microzig.zig");
@@ -11,7 +12,7 @@ const stepper = @import("app/stepper.zig");
 
 pub const USE_TEST_MICROZIG = true;
 
-pub fn main(init: std.process.Init) !void {
+fn speedRamp(init: std.process.Init) !void {
     var runner: STSpin.TestMotorRunner = .init(init.gpa);
     defer runner.deinit();
 
@@ -59,4 +60,49 @@ pub fn main(init: std.process.Init) !void {
         // if (motor.current_position > 6400)
         //     break;
     }
+}
+
+const STEPS_PER_REVOLUTION = 200 * 4;
+const STEP_TIME = 2;
+
+fn recalculateSpeedFloat(rpm: f32) u32 {
+    assert(rpm >= 0);
+
+    if (rpm == 0)
+        return 0;
+
+    @setFloatMode(.optimized);
+    const spm = STEPS_PER_REVOLUTION * rpm;
+    return @intFromFloat(@max(@as(f32, STEP_TIME), @round(1_000_000 * 60 / spm)));
+}
+
+fn recalculateSpeedInt(rpm: u32) u32 {
+    if (rpm == 0)
+        return 0;
+
+    const SCALE = 2;
+
+    return ((1_000_000 * 60 * 100 / SCALE) /
+        (rpm * STEPS_PER_REVOLUTION)) * SCALE;
+}
+
+fn intSpeed() void {
+    var rpm: f32 = 0.01;
+    while (rpm < 65536) {
+        const f_step = recalculateSpeedFloat(rpm);
+        const i_rpm: u32 = @intFromFloat(rpm * 100);
+        const i_step = recalculateSpeedInt(i_rpm);
+        print(
+            "rpm: {d:>10.2}, i_rpm: {d:>8}, float: {d:>8}, int: {d:>8}\n",
+            .{ rpm, i_rpm, f_step, i_step },
+        );
+        rpm *= 2;
+    }
+}
+
+pub fn main(init: std.process.Init) !void {
+    if (false)
+        try speedRamp(init);
+    if (true)
+        intSpeed();
 }

@@ -17,7 +17,7 @@ const Sequencer = struct {
     const Self = @This();
 
     pub const Step = struct {
-        speed: f32 = 300,
+        speed: u32 = 300_00,
         steps: i32,
     };
     const MaxSteps = 100;
@@ -92,6 +92,7 @@ const pin_config = hal.pins.GlobalConfiguration{
     .GPIO16 = .{ .name = "reset", .direction = .out },
 
     .GPIO25 = .{ .name = "led", .direction = .out },
+    .GPIO26 = .{ .name = "busy", .direction = .out },
 };
 
 pub fn main() !void {
@@ -116,15 +117,17 @@ pub fn main() !void {
     });
     stepper.setMicrostep(4);
 
+    const rev_steps: i32 = @intCast(stepper.stepsPerRevolution());
+
     const steps = &[_]Sequencer.Step{
-        .{ .speed = 60.00, .steps = 400 }, // M0 / M8
-        .{ .speed = 120.00, .steps = -800 }, // M1
-        .{ .speed = 240.00, .steps = 1600 }, // M2
-        .{ .speed = 480.00, .steps = -3200 }, // M3 unstable after this
-        .{ .speed = 960.00, .steps = 6400 }, // M4
-        .{ .speed = 1920.00, .steps = -12800 }, // M5 can't do these
-        .{ .speed = 3840.00, .steps = 25600 }, // M6
-        .{ .speed = 7680.00, .steps = -51200 }, // M7
+        .{ .speed = 60_00, .steps = rev_steps * 1 }, // M0 / M8
+        .{ .speed = 120_00, .steps = -rev_steps * 2 }, // M1
+        .{ .speed = 240_00, .steps = rev_steps * 4 }, // M2
+        .{ .speed = 480_00, .steps = -rev_steps * 8 }, // M3 unstable after this
+        .{ .speed = 960_00, .steps = rev_steps * 16 }, // M4
+        .{ .speed = 1920_00, .steps = -rev_steps * 32 }, // M5 can't do these
+        .{ .speed = 3840_00, .steps = rev_steps * 64 }, // M6
+        .{ .speed = 7680_00, .steps = -rev_steps * 128 }, // M7
     };
 
     blue1.activate();
@@ -136,7 +139,7 @@ pub fn main() !void {
     try stepper.start(scheduler.pri(0));
 
     var monitor: SchedulerMonitor = .{
-        .indicator = Indicator.init(pins.led),
+        .indicator = Indicator.init(pins.busy),
     };
 
     const hook = monitor.hook();
