@@ -56,14 +56,6 @@ pub const StepperController = struct {
         m.setSpeed(0);
         m.setRemaining(0);
     }
-
-    fn adviseState(self: *Self, state: State) !void {
-        if (self.state != state) {
-            self.state = state;
-            try self.ee.emit(.{ .target = self, .state = state });
-        }
-    }
-
     pub fn set(self: *Self, set_point: i64) void {
         self.set_point = set_point;
         self.run_mode = .SERVO;
@@ -77,6 +69,13 @@ pub const StepperController = struct {
 
     pub fn stop(self: *Self) void {
         self.run_mode = .STOP;
+    }
+
+    fn adviseState(self: *Self, state: State) !void {
+        if (self.state != state) {
+            self.state = state;
+            try self.ee.emit(.{ .target = self, .state = state });
+        }
     }
 
     fn setSpeed(self: *Self, rpm: f32) void {
