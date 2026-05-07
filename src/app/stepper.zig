@@ -113,8 +113,8 @@ pub const StepperController = struct {
                     // Need to move
                     self.stopping_distance = 0;
                     self.setSpeed(c.min_rpm);
-                    const nudge: i32 = std.math.sign(pos_error);
-                    m.setRemaining(nudge * 2);
+                    const step: i32 = std.math.sign(pos_error);
+                    m.setRemaining(step * 2);
                     try self.adviseState(.MOVING);
                 }
             },
