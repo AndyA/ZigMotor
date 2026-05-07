@@ -69,6 +69,14 @@ pub const Direction = enum(u2) {
     CCW,
     UNKNOWN, // at startup
 
+    pub fn from_error(err: anytype) Direction {
+        if (err < 0)
+            return .CCW;
+        if (err > 0)
+            return .CW;
+        return .UNKNOWN;
+    }
+
     pub fn step(self: Direction) i8 {
         return switch (self) {
             .CW => 1,
@@ -186,7 +194,7 @@ pub fn stop(self: *Self) void {
 }
 
 pub fn rotate(self: *Self, steps: i32) void {
-    self.steps_remaining +|= steps;
+    self.steps_remaining += steps;
 }
 
 pub fn setRemaining(self: *Self, steps: i32) void {
@@ -198,17 +206,17 @@ pub fn stepsPerRevolution(self: Self) u32 {
         self.microstep.activeOrPending();
 }
 
-fn calculateSpeed(self: *Self, rpm: u32) u32 {
+fn calculateStepUs(self: *Self, rpm: u32) u32 {
     if (rpm == 0)
         return 0;
 
     const SCALE = 2;
     return ((1_000_000 * 60 * 100 / SCALE) /
-        (rpm * self.stepsPerRevolution())) * SCALE;
+        (rpm * self.stepsPerRevolution() / SCALE));
 }
 
 fn recalculateSpeed(self: *Self) void {
-    self.us_per_step = @max(STEP_TIME * 2, self.calculateSpeed(self.speed));
+    self.us_per_step = @max(STEP_TIME * 2, self.calculateStepUs(self.speed));
 }
 
 pub fn setSpeed(self: *Self, rpm: u32) void {

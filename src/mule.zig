@@ -27,10 +27,10 @@ fn speedRamp(init: std.process.Init) !void {
 
     var controller = stepper.StepperController.init(.{
         .motor = &motor,
-        .min_rpm = 60,
-        .max_rpm = 2400,
-        .max_accel = 500000,
-        .max_decel = 500000,
+        .min_rpm = 5,
+        .max_rpm = 600,
+        .max_delta = 5,
+        .rate = 20000,
     });
     controller.attach();
 
@@ -47,15 +47,17 @@ fn speedRamp(init: std.process.Init) !void {
     while (controller.state == .MOVING) {
         try runner.advance();
         // runner.printLog();
-        print("time: {d}, controller: {s}, speed: {d}/{d}, µS/step: {d} " ++
-            "position: {d}, direction: {s}\n", .{
+        print("t: {d:>7}, s: {s:>7}, rpm: {d:>4}, µS/s: {d:>4}, " ++
+            "set: {d:>5}, sd: {d:>5}, pos: {d:>5}, dir: {s:>3}, rem: {d:>5}\n", .{
             runner.slot.now.to_us(),
             @tagName(controller.state),
             motor.speed,
-            motor.getActualSpeed(),
             motor.us_per_step,
+            controller.set_point,
+            controller.stopping_distance,
             motor.current_position,
             @tagName(motor.direction),
+            motor.steps_remaining,
         });
         // if (motor.current_position > 6400)
         //     break;
@@ -101,8 +103,8 @@ fn intSpeed() void {
 }
 
 pub fn main(init: std.process.Init) !void {
-    if (false)
-        try speedRamp(init);
     if (true)
+        try speedRamp(init);
+    if (false)
         intSpeed();
 }

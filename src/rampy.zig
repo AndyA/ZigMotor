@@ -24,8 +24,8 @@ const Ramper = struct {
         motor: *STSpin,
         min_rpm: f32,
         max_rpm: f32,
-        max_delta: f32,
-        rate: f32,
+        max_delta: f32, // rate limits initial acceleration
+        rate: f32, // rpm / (rpm ^ 2)
         rest_time: u32, // µS
         cruise_time: u32, // µS
     };
