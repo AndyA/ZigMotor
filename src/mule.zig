@@ -47,7 +47,7 @@ fn speedRamp(init: std.process.Init) !void {
     while (controller.state == .MOVING) {
         try runner.advance();
         // runner.printLog();
-        print("t: {d:>7}, s: {s:>7}, rpm: {d:>4}, µS/s: {d:>4}, " ++
+        print("t: {d:>7}, s: {s:>7}, rpm: {d:>5}, µS/s: {d:>4}, " ++
             "set: {d:>5}, sd: {d:>5}, pos: {d:>5}, dir: {s:>3}, rem: {d:>5}\n", .{
             runner.slot.now.to_us(),
             @tagName(controller.state),

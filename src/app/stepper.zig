@@ -125,38 +125,29 @@ pub const StepperController = struct {
             .MOVING => {
                 var direction = m.direction;
 
-                if (self.rpm <= c.min_rpm) {
-                    if (pos_error == 0) {
-                        m.setRemaining(0);
-                        try self.adviseState(.STOPPED);
-                        return;
-                    }
+                if (self.rpm <= c.min_rpm)
                     direction = STSpin.Direction.from_error(pos_error);
-                }
 
                 // Error relative to current direction: -ve means it's behind us
                 const rel_error = pos_error * @as(i64, @intCast(direction.step()));
-                // print("rel_error: {d}\n", .{rel_error});
-                if (self.stopping_distance > rel_error) {
-                    // need to slow down
-                    // print("slow down\n", .{});
-                    const next_rpm = self.rpm - self.rpmDelta();
-                    self.stopping_distance -|= 1;
-                    if (next_rpm >= c.min_rpm)
-                        self.setSpeed(next_rpm)
-                    else
-                        self.setSpeed(0);
+                if (rel_error == 0 and self.stopping_distance == 0) {
+                    m.setRemaining(0);
+                    try self.adviseState(.STOPPED);
+                    return;
+                }
 
+                // print("rel_error: {d}\n", .{rel_error});
+                if (self.stopping_distance >= rel_error) {
+                    // need to slow down
+                    self.setSpeed(@max(c.min_rpm, self.rpm - self.rpmDelta()));
+                    self.stopping_distance -|= 1;
                     const step: i32 = 2 * @as(i32, @intCast(direction.step()));
                     m.setRemaining(step);
                     return;
                 }
 
                 if (self.rpm < c.max_rpm) {
-                    const next_rpm = self.rpm + self.rpmDelta();
-                    if (next_rpm < c.max_rpm)
-                        self.setSpeed(next_rpm);
-
+                    self.setSpeed(@min(c.max_rpm, self.rpm + self.rpmDelta()));
                     self.stopping_distance += 1;
                 }
 

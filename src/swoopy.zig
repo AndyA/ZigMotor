@@ -138,7 +138,7 @@ pub fn main() !void {
     const MICROSTEP = 4;
 
     // microsteps per revolution
-    const USPR = STEPS_PER_REVOLUTION * MICROSTEP;
+    const USPR = STEPS_PER_REVOLUTION * MICROSTEP / 4;
 
     const steps = &[_]Sequencer.Step{
         .{ .set_point = USPR * 1 },
