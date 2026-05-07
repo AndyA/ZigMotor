@@ -123,10 +123,10 @@ pub const StepperController = struct {
                 }
             },
             .MOVING => {
-                var direction = m.direction;
-
-                if (self.rpm <= c.min_rpm)
-                    direction = STSpin.Direction.from_error(pos_error);
+                const direction = if (self.rpm > c.min_rpm)
+                    m.direction
+                else
+                    STSpin.Direction.from_error(pos_error);
 
                 // Error relative to current direction: -ve means it's behind us
                 const rel_error = pos_error * @as(i64, @intCast(direction.step()));
@@ -136,7 +136,6 @@ pub const StepperController = struct {
                     return;
                 }
 
-                // print("rel_error: {d}\n", .{rel_error});
                 if (self.stopping_distance >= rel_error) {
                     // need to slow down
                     self.setSpeed(@max(c.min_rpm, self.rpm - self.rpmDelta()));
