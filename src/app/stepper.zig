@@ -80,7 +80,6 @@ pub const StepperController = struct {
     }
 
     fn setSpeed(self: *Self, rpm: f32) void {
-        // print("setSpeed({d})\n", .{rpm});
         self.config.motor.setSpeedFloat(rpm);
         self.rpm = rpm;
     }
@@ -108,12 +107,10 @@ pub const StepperController = struct {
             .STOP => 0,
         };
 
-        // print("pos_error: {d}, nudge: {d}\n", .{ pos_error, nudge });
-
         switch (self.state) {
             .STOPPED => {
                 if (pos_error != 0) {
-                    // need to move!
+                    // Need to move
                     self.stopping_distance = 0;
                     self.setSpeed(c.min_rpm);
                     const nudge: i32 = std.math.sign(pos_error);
@@ -122,7 +119,14 @@ pub const StepperController = struct {
                 }
             },
             .MOVING => {
-                // if we're still moving at speed the ambient direction is the motor's
+                if (pos_error == 0 and self.stopping_distance == 0) {
+                    // we've arrived
+                    m.setRemaining(0);
+                    try self.adviseState(.STOPPED);
+                    return;
+                }
+
+                // If we're still moving at speed the ambient direction is the motor's
                 // current direction; otherwise it's up for grabs and we set it to the
                 // direction we want to go.
                 const direction = if (self.rpm > c.min_rpm)
@@ -134,19 +138,13 @@ pub const StepperController = struct {
 
                 // Error relative to ambient direction: -ve means it's behind us
                 const rel_error = pos_error * step;
-                if (rel_error == 0 and self.stopping_distance == 0) {
-                    // we've arrived
-                    m.setRemaining(0);
-                    try self.adviseState(.STOPPED);
-                    return;
-                }
 
                 if (self.stopping_distance >= rel_error) {
-                    // need to slow down
+                    // Need to slow down
                     self.setSpeed(@max(c.min_rpm, self.rpm - self.rpmDelta()));
-                    self.stopping_distance -|= 1;
+                    self.stopping_distance -= 1;
                 } else if (self.rpm < c.max_rpm) {
-                    // need to speed up
+                    // Need to speed up
                     self.setSpeed(@min(c.max_rpm, self.rpm + self.rpmDelta()));
                     self.stopping_distance += 1;
                 }
