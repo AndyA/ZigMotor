@@ -36,6 +36,7 @@ const Ramper = struct {
     state: State = .INIT,
     rpm: f32 = 0,
     deadline: time.Absolute = Never,
+    direction: i2 = 1,
 
     pub fn init(config: Config) Self {
         return .{ .config = config };
@@ -75,7 +76,7 @@ const Ramper = struct {
         const c = self.config;
 
         if (self.state != .INIT)
-            c.motor.setRemaining(2);
+            c.motor.setRemaining(@as(i32, @intCast(self.direction)) * 2);
 
         switch (self.state) {
             .INIT => {},
@@ -108,6 +109,7 @@ const Ramper = struct {
                 self.setSpeed(0);
                 self.setDeadline(now, c.rest_time);
                 self.state = .REST;
+                self.direction = -self.direction;
             },
         }
     }
