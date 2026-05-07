@@ -24,6 +24,7 @@ const Ramper = struct {
         motor: *STSpin,
         min_rpm: f32,
         max_rpm: f32,
+        max_delta: f32,
         rate: f32,
         rest_time: u32, // µS
         cruise_time: u32, // µS
@@ -57,7 +58,8 @@ const Ramper = struct {
 
     fn rpmDelta(self: *const Self) f32 {
         const c = self.config;
-        return c.rate / (self.rpm * self.rpm);
+        const delta = c.rate / (self.rpm * self.rpm);
+        return @min(c.max_delta, delta);
     }
 
     fn setDeadline(self: *Self, now: time.Absolute, delay_us: u32) void {
@@ -103,7 +105,7 @@ const Ramper = struct {
                     return;
                 }
 
-                self.setSpeed(c.min_rpm);
+                self.setSpeed(0);
                 self.setDeadline(now, c.rest_time);
                 self.state = .REST;
             },
@@ -179,9 +181,10 @@ pub fn main() !void {
 
     var ramper: Ramper = .init(.{
         .motor = &stepper,
-        .min_rpm = 20,
+        .min_rpm = 5,
         .max_rpm = 500,
-        .rate = 5000,
+        .max_delta = 5,
+        .rate = 20000,
         .rest_time = 2_000_000,
         .cruise_time = 5_000_000,
     });
