@@ -108,8 +108,6 @@ pub const StepperController = struct {
             .STOP => 0,
         };
 
-        const nudge: i32 = @as(i32, @intCast(std.math.sign(pos_error))) * 2;
-
         // print("pos_error: {d}, nudge: {d}\n", .{ pos_error, nudge });
 
         switch (self.state) {
@@ -118,19 +116,26 @@ pub const StepperController = struct {
                     // need to move!
                     self.stopping_distance = 0;
                     self.setSpeed(c.min_rpm);
-                    m.setRemaining(nudge);
+                    const nudge: i32 = std.math.sign(pos_error);
+                    m.setRemaining(nudge * 2);
                     try self.adviseState(.MOVING);
                 }
             },
             .MOVING => {
+                // if we're still moving at speed the ambient direction is the motor's
+                // current direction; otherwise it's up for grabs and we set it to the
+                // direction we want to go.
                 const direction = if (self.rpm > c.min_rpm)
                     m.direction
                 else
                     STSpin.Direction.from_error(pos_error);
 
-                // Error relative to current direction: -ve means it's behind us
-                const rel_error = pos_error * @as(i64, @intCast(direction.step()));
+                const step = direction.step(i32);
+
+                // Error relative to ambient direction: -ve means it's behind us
+                const rel_error = pos_error * step;
                 if (rel_error == 0 and self.stopping_distance == 0) {
+                    // we've arrived
                     m.setRemaining(0);
                     try self.adviseState(.STOPPED);
                     return;
@@ -140,17 +145,13 @@ pub const StepperController = struct {
                     // need to slow down
                     self.setSpeed(@max(c.min_rpm, self.rpm - self.rpmDelta()));
                     self.stopping_distance -|= 1;
-                    const step: i32 = 2 * @as(i32, @intCast(direction.step()));
-                    m.setRemaining(step);
-                    return;
-                }
-
-                if (self.rpm < c.max_rpm) {
+                } else if (self.rpm < c.max_rpm) {
+                    // need to speed up
                     self.setSpeed(@min(c.max_rpm, self.rpm + self.rpmDelta()));
                     self.stopping_distance += 1;
                 }
 
-                m.setRemaining(nudge);
+                m.setRemaining(step * 2);
             },
         }
     }

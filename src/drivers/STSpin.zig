@@ -77,7 +77,7 @@ pub const Direction = enum(u2) {
         return .UNKNOWN;
     }
 
-    pub fn step(self: Direction) i8 {
+    pub fn step(self: Direction, comptime T: type) T {
         return switch (self) {
             .CW => 1,
             .CCW => -1,
