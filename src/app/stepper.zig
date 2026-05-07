@@ -205,7 +205,7 @@ pub const StepperController = struct {
     }
 
     fn onRTStateChange(ctx: *anyopaque, e: STSpin.RTEventPayload) !void {
-        const self: *StepperController = @ptrCast(@alignCast(ctx));
+        const self: *Self = @ptrCast(@alignCast(ctx));
         try self.tick(e.now);
     }
 };

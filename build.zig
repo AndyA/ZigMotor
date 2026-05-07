@@ -15,9 +15,10 @@ pub fn build(b: *std.Build) void {
     const firmwares = [_][]const u8{
         "blinky",
         "clocky",
+        "rampy",
+        "speedy",
         "steppy",
         "swoopy",
-        "speedy",
     };
 
     inline for (firmwares) |name| {
