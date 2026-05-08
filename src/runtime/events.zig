@@ -77,6 +77,7 @@ pub fn Emitter(comptime PayloadType: type, comptime size: u8) type {
                 .mortal = mortal,
             };
             self.used += 1;
+            if (mortal) self.mortals += 1;
         }
 
         fn find(self: Self, from: u8, handler: HandlerType, context: *anyopaque) ?u8 {
@@ -113,7 +114,6 @@ pub fn Emitter(comptime PayloadType: type, comptime size: u8) type {
         pub fn once(self: *Self, handler: HandlerType, context: *anyopaque) void {
             assert(self.find(self.hot, handler, context) == null);
             self.add(handler, context, true);
-            self.mortals += 1;
         }
 
         pub fn removeListener(self: *Self, handler: HandlerType, context: *anyopaque) void {
