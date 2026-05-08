@@ -50,7 +50,7 @@ const Sequencer = struct {
 
     fn nextStep(self: *Self, controller: *StepperController) void {
         if (self.used == 0) return;
-        std.log.info("step {d}", .{self.current});
+        std.log.info("step {d:>3}", .{self.current});
         if (self.alert) |alert|
             alert.activate();
         const step = self.steps[self.current];
@@ -111,7 +111,7 @@ const pin_config = hal.pins.GlobalConfiguration{
 
 pub fn main() !void {
     @setEvalBranchQuota(std.math.maxInt(usize));
-    logging.init();
+    logging.init(.{});
     const pins = pin_config.apply();
     var scheduler: Scheduler = .empty;
 

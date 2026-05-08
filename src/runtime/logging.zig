@@ -15,9 +15,14 @@ pub const microzig_options: microzig.Options = .{
     .logFn = hal.uart.log,
 };
 
-pub fn init() void {
-    const uart = hal.uart.instance.num(0);
-    const uart_tx_pin = hal.gpio.num(0);
+pub const Config = struct {
+    uart: u1 = 0,
+    tx_pin: u9 = 0,
+};
+
+pub fn init(config: Config) void {
+    const uart = hal.uart.instance.num(config.uart);
+    const uart_tx_pin = hal.gpio.num(config.tx_pin);
     uart_tx_pin.set_function(.uart);
     uart.apply(.{ .clock_config = hal.clock_config });
     hal.uart.init_logger(uart, &.{});
