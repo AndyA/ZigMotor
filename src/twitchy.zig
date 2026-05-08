@@ -15,6 +15,7 @@ const Indicator = @import("drivers/Indicator.zig");
 const STSpin = @import("drivers/STSpin.zig");
 const stepper = @import("app/stepper.zig");
 const StepperController = stepper.StepperController;
+const Smoother = @import("app/smoother.zig").Smoother;
 
 pub const microzig_options: microzig.Options = .{
     .log_level = .debug,
@@ -65,45 +66,11 @@ const pin_config = hal.pins.GlobalConfiguration{
     .GPIO26 = .{ .name = "busy", .direction = .out },
 };
 
-fn makeAverager(comptime T: type, comptime size: u8) type {
-    assert(size != 0);
-    const v_bits = @typeInfo(T).int.bits;
-    const s_bits = std.math.log2_int_ceil(u8, size);
-
-    return struct {
-        const Self = @This();
-        pub const Total = @Int(.unsigned, v_bits + s_bits);
-
-        samples: [size]T = undefined,
-        total: Total = 0,
-        pos: u8 = 0,
-        used: u8 = 0,
-
-        pub fn update(self: *Self, value: T) T {
-            assert(self.pos < size);
-            assert(self.used <= size);
-
-            if (self.used == size)
-                self.total -= self.samples[self.pos]
-            else
-                self.used += 1;
-
-            self.total += value;
-            self.samples[self.pos] = value;
-            self.pos += 1;
-            if (self.pos == size)
-                self.pos = 0;
-
-            return @intCast(self.total / size);
-        }
-    };
-}
-
 const AnalogueInput = struct {
     const Self = @This();
     controller: *StepperController,
     value: ?u12 = null,
-    smoother: makeAverager(u12, 30) = .{},
+    smoother: Smoother(u12, 30) = .{},
 
     fn poll(ctx: *anyopaque, slot: *sched.ScheduleSlot) !void {
         const self: *Self = @ptrCast(@alignCast(ctx));
@@ -184,12 +151,4 @@ pub fn main() !void {
     while (true) {
         _ = try scheduler.pollWithHook(clock.microsecondsSinceBoot(), hook);
     }
-}
-
-test {
-    _ = @import("runtime/scheduler.zig");
-    _ = @import("runtime/events.zig");
-    _ = @import("runtime/ticker.zig");
-    _ = @import("drivers/STSpin.zig");
-    _ = @import("app/stepper.zig");
 }

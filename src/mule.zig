@@ -108,3 +108,11 @@ pub fn main(init: std.process.Init) !void {
     if (false)
         intSpeed();
 }
+
+test {
+    _ = @import("runtime/scheduler.zig");
+    _ = @import("runtime/events.zig");
+    _ = @import("runtime/ticker.zig");
+    _ = @import("drivers/STSpin.zig");
+    _ = @import("app/stepper.zig");
+}
