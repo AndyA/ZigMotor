@@ -19,6 +19,7 @@ pub fn build(b: *std.Build) void {
         "speedy",
         "steppy",
         "swoopy",
+        "twitchy",
     };
 
     inline for (firmwares) |name| {

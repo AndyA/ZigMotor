@@ -27,56 +27,6 @@ pub fn panic(message: []const u8, _: ?*std.builtin.StackTrace, _: ?usize) noretu
     while (true) {}
 }
 
-const Sequencer = struct {
-    const Self = @This();
-
-    pub const Step = struct {
-        set_point: i64,
-    };
-    const MaxSteps = 100;
-
-    steps: [MaxSteps]Step = undefined,
-    used: u16 = 0,
-    current: u16 = 0,
-    alert: ?*Alert = null,
-
-    pub const empty: Self = .{};
-
-    pub fn attach(self: *Self, controller: *StepperController) void {
-        controller.attach();
-        controller.ee.addListener(onStateChange, self);
-        self.nextStep(controller);
-    }
-
-    pub fn addSteps(self: *Self, steps: []const Step) void {
-        assert(self.used + steps.len <= MaxSteps);
-        @memcpy(self.steps[self.used .. self.used + steps.len], steps);
-        self.used += @intCast(steps.len);
-    }
-
-    fn nextStep(self: *Self, controller: *StepperController) void {
-        if (self.used == 0) return;
-        std.log.info("step {d:>3}", .{self.current});
-        if (self.alert) |alert|
-            alert.activate();
-        const step = self.steps[self.current];
-        controller.set(step.set_point);
-        self.current += 1;
-        if (self.current >= self.used)
-            self.current = 0;
-    }
-
-    fn onStateChange(ctx: *anyopaque, e: StepperController.Event) !void {
-        const self: *Self = @ptrCast(@alignCast(ctx));
-        switch (e.state) {
-            .STOPPED => {
-                self.nextStep(e.target);
-            },
-            else => {},
-        }
-    }
-};
-
 const Scheduler = sched.makeScheduler(8);
 
 const SchedulerMonitor = struct {
@@ -115,6 +65,33 @@ const pin_config = hal.pins.GlobalConfiguration{
     .GPIO26 = .{ .name = "busy", .direction = .out },
 };
 
+const AnalogueInput = struct {
+    const Self = @This();
+    controller: *StepperController,
+    value: ?u12 = null,
+
+    fn poll(ctx: *anyopaque, slot: *sched.ScheduleSlot) !void {
+        const self: *Self = @ptrCast(@alignCast(ctx));
+
+        if (hal.adc.is_ready()) {
+            const v = try hal.adc.read_result();
+            if (v != self.value) {
+                self.value = v;
+                self.controller.set(v);
+                std.log.info("input: {d:>5}", .{self.value.?});
+            }
+            hal.adc.start(.one_shot);
+        }
+
+        slot.delay(100_000);
+    }
+
+    pub fn start(self: *Self, slot: *sched.ScheduleSlot) void {
+        slot.schedule(slot.now, poll, self);
+        hal.adc.start(.one_shot);
+    }
+};
+
 pub fn main() !void {
     @setEvalBranchQuota(std.math.maxInt(usize));
     logging.init(.{});
@@ -148,32 +125,18 @@ pub fn main() !void {
     });
     controller.attach();
 
-    const STEPS_PER_REVOLUTION = 200;
+    // const STEPS_PER_REVOLUTION = 200;
     const MICROSTEP = 4;
-
-    // microsteps per revolution
-    const USPR = STEPS_PER_REVOLUTION * MICROSTEP / 4;
-
-    const steps = &[_]Sequencer.Step{
-        .{ .set_point = USPR * 1 },
-        .{ .set_point = -USPR * 1 },
-        .{ .set_point = USPR * 2 },
-        .{ .set_point = -USPR * 2 },
-        .{ .set_point = USPR * 4 },
-        .{ .set_point = -USPR * 4 },
-        .{ .set_point = USPR * 8 },
-        .{ .set_point = -USPR * 8 },
-        .{ .set_point = USPR * 16 },
-        .{ .set_point = -USPR * 16 },
-        .{ .set_point = USPR * 32 },
-        .{ .set_point = -USPR * 32 },
-    };
 
     blue1.activate();
 
-    var sequencer: Sequencer = .{ .alert = &red2 };
-    sequencer.addSteps(steps);
-    sequencer.attach(&controller);
+    // Init ADC
+    hal.adc.apply(.{});
+    hal.adc.Input.configure_gpio_pin(.ain2);
+    hal.adc.select_input(.ain2);
+    // hal.adc.start(.free_running);
+    var pot: AnalogueInput = .{ .controller = &controller };
+    pot.start(scheduler.pri(2));
 
     motor.setMicrostep(MICROSTEP);
     try motor.start(scheduler.pri(0));
