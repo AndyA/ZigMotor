@@ -41,6 +41,8 @@ pub const StepperController = struct {
     run_mode: RunMode = .SERVO,
     run_dir: STSpin.Direction = .UNKNOWN,
 
+    next_report: time.Absolute = .from_us(0),
+
     fn checkConfig(config: Config) void {
         assert(config.max_rpm >= config.min_rpm);
     }
@@ -90,7 +92,7 @@ pub const StepperController = struct {
         return @min(c.max_delta, delta);
     }
 
-    fn tick(self: *Self) !void {
+    fn tick(self: *Self, now: time.Absolute) !void {
         const c = self.config;
         const m = c.motor;
 
@@ -106,6 +108,23 @@ pub const StepperController = struct {
             },
             .STOP => 0,
         };
+
+        if (self.next_report.is_reached_by(now)) {
+            std.log.info(
+                "state: {s}, run_mode: {s}, rpm: {d}, set_point: {d}, current: {d}, " ++
+                    "pos_error: {d}, stopping_distance: {d}",
+                .{
+                    @tagName(self.state),
+                    @tagName(self.run_mode),
+                    self.rpm,
+                    self.set_point,
+                    m.current_position,
+                    pos_error,
+                    self.stopping_distance,
+                },
+            );
+            self.next_report = now.add_duration(.from_us(1_000_000));
+        }
 
         switch (self.state) {
             .STOPPED => {
@@ -142,7 +161,7 @@ pub const StepperController = struct {
                 if (self.stopping_distance >= rel_error) {
                     // Need to slow down
                     self.setSpeed(@max(c.min_rpm, self.rpm - self.rpmDelta()));
-                    self.stopping_distance -= 1;
+                    self.stopping_distance -|= 1;
                 } else if (self.rpm < c.max_rpm) {
                     // Need to speed up
                     self.setSpeed(@min(c.max_rpm, self.rpm + self.rpmDelta()));
@@ -154,8 +173,8 @@ pub const StepperController = struct {
         }
     }
 
-    fn onRTStateChange(ctx: *anyopaque, _: STSpin.RTEventPayload) !void {
+    fn onRTStateChange(ctx: *anyopaque, e: STSpin.RTEventPayload) !void {
         const self: *Self = @ptrCast(@alignCast(ctx));
-        try self.tick();
+        try self.tick(e.now);
     }
 };
