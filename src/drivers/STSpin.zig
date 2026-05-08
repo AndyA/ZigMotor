@@ -307,13 +307,13 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
                 continue :sm self.state;
             }
 
-            // Keep the RT notifications coming
-            try self.rtNotify(slot.now);
-
             if (self.steps_remaining != 0) {
                 try self.notifyState(.START);
                 continue :sm self.state;
             }
+
+            // Keep the RT notifications coming
+            try self.rtNotify(slot.now);
 
             slot.delay(IDLE_TIME);
         },
@@ -334,7 +334,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
 
             self.state = .STEP;
 
-            const new_direction: Direction = if (self.steps_remaining < 0) .CCW else .CW;
+            const new_direction: Direction = .from_error(self.steps_remaining);
             if (new_direction == self.direction)
                 continue :sm self.state; // all set, go and step
 

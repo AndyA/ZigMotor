@@ -4,6 +4,7 @@ const assert = std.debug.assert;
 const microzig = @import("microzig");
 const hal = microzig.hal;
 
+const logging = @import("runtime/logging.zig");
 const sched = @import("runtime/scheduler.zig");
 const events = @import("runtime/events.zig");
 const clock = @import("runtime/clock.zig");
@@ -14,6 +15,11 @@ const Indicator = @import("drivers/Indicator.zig");
 const STSpin = @import("drivers/STSpin.zig");
 const stepper = @import("app/stepper.zig");
 const StepperController = stepper.StepperController;
+
+pub const microzig_options: microzig.Options = .{
+    .log_level = .debug,
+    .logFn = hal.uart.log,
+};
 
 const Sequencer = struct {
     const Self = @This();
@@ -44,6 +50,7 @@ const Sequencer = struct {
 
     fn nextStep(self: *Self, controller: *StepperController) void {
         if (self.used == 0) return;
+        std.log.info("step {d}", .{self.current});
         if (self.alert) |alert|
             alert.activate();
         const step = self.steps[self.current];
@@ -104,6 +111,7 @@ const pin_config = hal.pins.GlobalConfiguration{
 
 pub fn main() !void {
     @setEvalBranchQuota(std.math.maxInt(usize));
+    logging.init();
     const pins = pin_config.apply();
     var scheduler: Scheduler = .empty;
 
