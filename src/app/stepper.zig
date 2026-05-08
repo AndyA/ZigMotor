@@ -63,8 +63,8 @@ pub const StepperController = struct {
 
     pub fn run(self: *Self, run_dir: STSpin.Direction) void {
         assert(run_dir != .UNKNOWN);
-        self.run_mode = .FREERUN;
         self.run_dir = run_dir;
+        self.run_mode = .FREERUN;
     }
 
     pub fn stop(self: *Self) void {
