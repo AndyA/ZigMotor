@@ -78,12 +78,12 @@ const AnalogueInput = struct {
             if (v != self.value) {
                 self.value = v;
                 self.controller.set(v);
-                std.log.info("input: {d:>5}", .{self.value.?});
+                // std.log.info("input: {d:>5}", .{self.value.?});
             }
             hal.adc.start(.one_shot);
         }
 
-        slot.delay(100_000);
+        slot.delay(10_000);
     }
 
     pub fn start(self: *Self, slot: *sched.ScheduleSlot) void {

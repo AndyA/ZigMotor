@@ -56,6 +56,7 @@ pub const StepperController = struct {
         m.setSpeed(0);
         m.setRemaining(0);
     }
+
     pub fn set(self: *Self, set_point: i64) void {
         self.set_point = set_point;
         self.run_mode = .SERVO;
