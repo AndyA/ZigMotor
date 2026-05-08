@@ -103,7 +103,7 @@ const AnalogueInput = struct {
     const Self = @This();
     controller: *StepperController,
     value: ?u12 = null,
-    smoother: makeAverager(u12, 20) = .{},
+    smoother: makeAverager(u12, 30) = .{},
 
     fn poll(ctx: *anyopaque, slot: *sched.ScheduleSlot) !void {
         const self: *Self = @ptrCast(@alignCast(ctx));
