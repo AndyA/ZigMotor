@@ -1,5 +1,6 @@
 const std = @import("std");
 const assert = std.debug.assert;
+const print = std.debug.print;
 
 const microzig = @import("microzig");
 const hal = microzig.hal;

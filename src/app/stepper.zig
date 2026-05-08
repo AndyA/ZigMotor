@@ -44,6 +44,7 @@ pub const StepperController = struct {
     next_report: time.Absolute = .from_us(0),
 
     fn checkConfig(config: Config) void {
+        assert(config.min_rpm > 0);
         assert(config.max_rpm >= config.min_rpm);
     }
 
@@ -110,19 +111,21 @@ pub const StepperController = struct {
         };
 
         if (self.next_report.is_reached_by(now)) {
-            std.log.info(
-                "state: {s}, run_mode: {s}, rpm: {d}, set_point: {d}, current: {d}, " ++
-                    "pos_error: {d}, stopping_distance: {d}",
-                .{
-                    @tagName(self.state),
-                    @tagName(self.run_mode),
-                    self.rpm,
-                    self.set_point,
-                    m.current_position,
-                    pos_error,
-                    self.stopping_distance,
-                },
-            );
+            if (true)
+                std.log.info(
+                    "state: {s:>7}, run_mode: {s:>7}, rpm: {d:>7.2}, " ++
+                        "set_point: {d:>6}, current: {d:>6}, " ++
+                        "pos_error: {d:>6}, stopping_distance: {d:>6}",
+                    .{
+                        @tagName(self.state),
+                        @tagName(self.run_mode),
+                        self.rpm,
+                        self.set_point,
+                        m.current_position,
+                        pos_error,
+                        self.stopping_distance,
+                    },
+                );
             self.next_report = now.add_duration(.from_us(1_000_000));
         }
 

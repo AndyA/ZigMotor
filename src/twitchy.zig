@@ -65,19 +65,54 @@ const pin_config = hal.pins.GlobalConfiguration{
     .GPIO26 = .{ .name = "busy", .direction = .out },
 };
 
+fn makeAverager(comptime T: type, comptime size: u8) type {
+    assert(size != 0);
+    const v_bits = @typeInfo(T).int.bits;
+    const s_bits = std.math.log2_int_ceil(u8, size);
+
+    return struct {
+        const Self = @This();
+        pub const Total = @Int(.unsigned, v_bits + s_bits);
+
+        samples: [size]T = undefined,
+        total: Total = 0,
+        pos: u8 = 0,
+        used: u8 = 0,
+
+        pub fn update(self: *Self, value: T) T {
+            assert(self.pos < size);
+            assert(self.used <= size);
+
+            if (self.used == size)
+                self.total -= self.samples[self.pos]
+            else
+                self.used += 1;
+
+            self.total += value;
+            self.samples[self.pos] = value;
+            self.pos += 1;
+            if (self.pos == size)
+                self.pos = 0;
+
+            return @intCast(self.total / size);
+        }
+    };
+}
+
 const AnalogueInput = struct {
     const Self = @This();
     controller: *StepperController,
     value: ?u12 = null,
+    smoother: makeAverager(u12, 20) = .{},
 
     fn poll(ctx: *anyopaque, slot: *sched.ScheduleSlot) !void {
         const self: *Self = @ptrCast(@alignCast(ctx));
 
         if (hal.adc.is_ready()) {
-            const v = try hal.adc.read_result();
-            if (v != self.value) {
-                self.value = v;
-                self.controller.set(v);
+            const value = self.smoother.update(try hal.adc.read_result());
+            if (value != self.value) {
+                self.value = value;
+                self.controller.set(value);
                 // std.log.info("input: {d:>5}", .{self.value.?});
             }
             hal.adc.start(.one_shot);
@@ -95,6 +130,7 @@ const AnalogueInput = struct {
 pub fn main() !void {
     @setEvalBranchQuota(std.math.maxInt(usize));
     logging.init(.{});
+    std.log.debug("init", .{});
     const pins = pin_config.apply();
     var scheduler: Scheduler = .empty;
 
@@ -125,7 +161,6 @@ pub fn main() !void {
     });
     controller.attach();
 
-    // const STEPS_PER_REVOLUTION = 200;
     const MICROSTEP = 4;
 
     blue1.activate();
@@ -134,9 +169,8 @@ pub fn main() !void {
     hal.adc.apply(.{});
     hal.adc.Input.configure_gpio_pin(.ain2);
     hal.adc.select_input(.ain2);
-    // hal.adc.start(.free_running);
     var pot: AnalogueInput = .{ .controller = &controller };
-    pot.start(scheduler.pri(2));
+    pot.start(scheduler.pri(3));
 
     motor.setMicrostep(MICROSTEP);
     try motor.start(scheduler.pri(0));
@@ -146,6 +180,7 @@ pub fn main() !void {
     };
 
     const hook = monitor.hook();
+    std.log.debug("running", .{});
     while (true) {
         _ = try scheduler.pollWithHook(clock.microsecondsSinceBoot(), hook);
     }

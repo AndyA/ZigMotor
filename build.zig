@@ -26,7 +26,7 @@ pub fn build(b: *std.Build) void {
         const fw = mb.add_firmware(.{
             .name = name,
             .target = mb.ports.rp2xxx.boards.raspberrypi.pico,
-            .optimize = .ReleaseFast,
+            .optimize = .ReleaseSafe,
             .root_source_file = b.path("src/" ++ name ++ ".zig"),
         });
 
