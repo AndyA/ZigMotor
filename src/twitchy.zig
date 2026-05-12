@@ -123,12 +123,12 @@ pub fn main() !void {
         .motor = &motor,
         .min_rpm = 5,
         .max_rpm = 600,
-        .max_delta = 5,
-        .rate = 20000,
+        .max_delta = 30,
+        .rate = 80000,
     });
     controller.attach();
 
-    const MICROSTEP = 4;
+    const MICROSTEP = 8;
 
     blue1.activate();
 
