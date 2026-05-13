@@ -111,22 +111,21 @@ pub const StepperController = struct {
             .STOP => 0,
         };
 
-        if (self.pacer.poll(now)) {
-            if (true)
-                std.log.info(
-                    "state: {s:>7}, run_mode: {s:>7}, rpm: {d:>7.2}, " ++
-                        "set_point: {d:>6}, current: {d:>6}, " ++
-                        "pos_error: {d:>6}, stopping_distance: {d:>6}",
-                    .{
-                        @tagName(self.state),
-                        @tagName(self.run_mode),
-                        self.rpm,
-                        self.set_point,
-                        m.current_position,
-                        pos_error,
-                        self.stopping_distance,
-                    },
-                );
+        if (true and self.pacer.poll(now)) {
+            std.log.info(
+                "state: {s:>7}, run_mode: {s:>7}, rpm: {d:>7.2}, " ++
+                    "set_point: {d:>6}, current: {d:>6}, " ++
+                    "pos_error: {d:>6}, stopping_distance: {d:>6}",
+                .{
+                    @tagName(self.state),
+                    @tagName(self.run_mode),
+                    self.rpm,
+                    self.set_point,
+                    m.current_position,
+                    pos_error,
+                    self.stopping_distance,
+                },
+            );
         }
 
         switch (self.state) {
