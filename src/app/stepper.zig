@@ -8,6 +8,7 @@ const time = microzig.drivers.time;
 
 const events = @import("../runtime/events.zig");
 const STSpin = @import("../drivers/STSpin.zig");
+const every = @import("../runtime/every.zig");
 
 pub const StepperController = struct {
     const Self = @This();
@@ -41,7 +42,7 @@ pub const StepperController = struct {
     run_mode: RunMode = .SERVO,
     run_dir: STSpin.Direction = .UNKNOWN,
 
-    next_report: time.Absolute = .from_us(0),
+    pacer: every.EveryTimer = .{ .every = .from_us(1_000_000) },
 
     fn checkConfig(config: Config) void {
         assert(config.min_rpm > 0);
@@ -110,7 +111,7 @@ pub const StepperController = struct {
             .STOP => 0,
         };
 
-        if (self.next_report.is_reached_by(now)) {
+        if (self.pacer.poll(now)) {
             if (true)
                 std.log.info(
                     "state: {s:>7}, run_mode: {s:>7}, rpm: {d:>7.2}, " ++
@@ -126,7 +127,6 @@ pub const StepperController = struct {
                         self.stopping_distance,
                     },
                 );
-            self.next_report = now.add_duration(.from_us(1_000_000));
         }
 
         switch (self.state) {
