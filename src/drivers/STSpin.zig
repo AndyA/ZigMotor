@@ -241,21 +241,21 @@ pub fn setMicrostep(self: *Self, microstep: u16) void {
 // DR ST
 // M4 M3 M2 M1
 //  0  0  0  0 Full-step
-//  0  1  0  1 1/2 step
-//  1  0  1  0 1/4th step
-//  0  1  1  1 1/8th step
-//  1  1  0  1 1/8th step
-//  1  1  1  1 1/16th step
-//  0  0  1  0 1/32nd step
-//  1  0  1  1 1/64th step
-//  1  1  1  0 1/64th step
 //  0  0  0  1 1/128th step
+//  0  0  1  0 1/32nd step
 //  0  0  1  1 1/256th step
-//  1  0  0  1 1/256th step
-//  0  1  1  0 1/256th step
-//  1  0  0  0 Full-step - 1/32nd step
 //  0  1  0  0 Full-step - 1/128nd step
+//  0  1  0  1 1/2 step
+//  0  1  1  0 1/256th step
+//  0  1  1  1 1/8th step
+//  1  0  0  0 Full-step - 1/32nd step
+//  1  0  0  1 1/256th step
+//  1  0  1  0 1/4th step
+//  1  0  1  1 1/64th step
 //  1  1  0  0 Full-step - 1/256th step
+//  1  1  0  1 1/8th step
+//  1  1  1  0 1/64th step
+//  1  1  1  1 1/16th step
 
 fn lookupMicrostep(microstep: u16) u4 {
     return switch (microstep) {
