@@ -111,7 +111,7 @@ pub const StepperController = struct {
             .STOP => 0,
         };
 
-        if (false and self.pacer.poll(e.now)) {
+        if (self.pacer.poll(e.now)) {
             std.log.info(
                 "state: {s:>7}, run_mode: {s:>7}, direction: {s:>3}, " ++
                     "rpm: {d:>7.2}, set_point: {d:>6}, current: {d:>6}, " ++
@@ -153,10 +153,10 @@ pub const StepperController = struct {
                 // If we're still moving at speed the ambient direction is the motor's
                 // current direction; otherwise it's up for grabs and we set it to the
                 // direction we want to go.
-                const direction = if (self.rpm > c.min_rpm)
-                    m.direction
+                const direction = if (self.stopping_distance == 0)
+                    STSpin.Direction.from_error(pos_error)
                 else
-                    STSpin.Direction.from_error(pos_error);
+                    m.direction;
 
                 const step = direction.step(i32);
 
@@ -166,7 +166,7 @@ pub const StepperController = struct {
                 if (self.stopping_distance >= rel_error) {
                     // Need to slow down
                     self.setSpeed(@max(c.min_rpm, self.rpm - self.rpmDelta()));
-                    self.stopping_distance -|= 1;
+                    self.stopping_distance -= 1;
                 } else if (self.rpm < c.max_rpm) {
                     // Need to speed up
                     self.setSpeed(@min(c.max_rpm, self.rpm + self.rpmDelta()));
