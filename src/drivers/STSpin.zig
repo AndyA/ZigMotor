@@ -62,6 +62,7 @@ pub const RTEventPayload = struct {
     target: *Self,
     state: State,
     now: time.Absolute,
+    running: bool,
 };
 
 pub const Direction = enum(u2) {
@@ -280,7 +281,7 @@ fn debugFlag(self: Self, state: u1) void {
         debug.put(state);
 }
 
-fn rtNotify(self: *Self, now: time.Absolute) !void {
+fn rtNotify(self: *Self, now: time.Absolute, running: bool) !void {
     self.debugFlag(1);
     defer self.debugFlag(0);
 
@@ -288,6 +289,7 @@ fn rtNotify(self: *Self, now: time.Absolute) !void {
         .target = self,
         .state = self.state,
         .now = now,
+        .running = running,
     });
 }
 
@@ -307,13 +309,13 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
                 continue :sm self.state;
             }
 
+            // Keep the RT notifications coming
+            try self.rtNotify(slot.now, false);
+
             if (self.steps_remaining != 0) {
                 try self.notifyState(.START);
                 continue :sm self.state;
             }
-
-            // Keep the RT notifications coming
-            try self.rtNotify(slot.now);
 
             slot.delay(IDLE_TIME);
         },
@@ -324,9 +326,6 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
             continue :sm self.state;
         },
         .MOVING => {
-            // RT notify so speed, direction can be set before step starts
-            try self.rtNotify(slot.now);
-
             if (self.steps_remaining == 0) {
                 try self.notifyState(.IDLE);
                 continue :sm self.state;
@@ -366,13 +365,10 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
         },
         .STEPPING => {
             c.step_pin.put(0);
-
             self.state = .STEPPED;
-            slot.delay(self.us_per_step - STEP_TIME);
-        },
-        .STEPPED => {
+
             const delta: i32 = if (self.steps_remaining > 0) 1 else -1;
-            self.steps_remaining -= delta;
+
             self.current_position += delta;
 
             // Track microstep phase in 1/256th of a step
@@ -380,6 +376,14 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
             const phase_delta: i32 = delta * step_size;
             self.phase = @intCast((@as(i32, self.phase) + phase_delta) & 0xff);
 
+            self.steps_remaining -= delta;
+
+            slot.delay(self.us_per_step - STEP_TIME);
+
+            // Set up for the next step
+            try self.rtNotify(slot.now, true);
+        },
+        .STEPPED => {
             if (self.steps_remaining == 0)
                 try self.notifyState(.IDLE)
             else

@@ -94,7 +94,7 @@ pub const StepperController = struct {
         return @min(c.max_delta, delta);
     }
 
-    fn tick(self: *Self, now: time.Absolute) !void {
+    fn tick(self: *Self, e: STSpin.RTEventPayload) !void {
         const c = self.config;
         const m = c.motor;
 
@@ -111,16 +111,15 @@ pub const StepperController = struct {
             .STOP => 0,
         };
 
-        if (true and self.pacer.poll(now)) {
+        if (false and self.pacer.poll(e.now)) {
             std.log.info(
-                "state: {s:>7}, run_mode: {s:>7}, m.dir: {s:>3}, m.state: {s:>10}, " ++
-                    "rpm: {d:>7.2}, set_point: {d:>6}, m.current: {d:>6}, " ++
+                "state: {s:>7}, run_mode: {s:>7}, direction: {s:>3}, " ++
+                    "rpm: {d:>7.2}, set_point: {d:>6}, current: {d:>6}, " ++
                     "pos_error: {d:>6}, stopping_distance: {d:>6}",
                 .{
                     @tagName(self.state),
                     @tagName(self.run_mode),
                     @tagName(m.direction),
-                    @tagName(m.state),
                     self.rpm,
                     self.set_point,
                     m.current_position,
@@ -132,16 +131,18 @@ pub const StepperController = struct {
 
         switch (self.state) {
             .STOPPED => {
+                assert(!e.running);
                 if (pos_error != 0) {
                     // Need to move
                     self.stopping_distance = 0;
                     self.setSpeed(c.min_rpm);
                     const step: i32 = std.math.sign(pos_error);
-                    m.setRemaining(step * 2);
+                    m.setRemaining(step);
                     try self.adviseState(.MOVING);
                 }
             },
             .MOVING => {
+                assert(e.running);
                 if (pos_error == 0 and self.stopping_distance == 0) {
                     // we've arrived
                     m.setRemaining(0);
@@ -172,13 +173,13 @@ pub const StepperController = struct {
                     self.stopping_distance += 1;
                 }
 
-                m.setRemaining(step * 2);
+                m.setRemaining(step);
             },
         }
     }
 
     fn onRTStateChange(ctx: *anyopaque, e: STSpin.RTEventPayload) !void {
         const self: *Self = @ptrCast(@alignCast(ctx));
-        try self.tick(e.now);
+        try self.tick(e);
     }
 };
