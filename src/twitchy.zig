@@ -70,7 +70,7 @@ const AnalogueInput = struct {
     const Self = @This();
     controller: *StepperController,
     value: ?u12 = null,
-    smoother: Smoother(u12, 30) = .{},
+    smoother: Smoother(u12, 50) = .{},
 
     fn poll(ctx: *anyopaque, slot: *sched.ScheduleSlot) !void {
         const self: *Self = @ptrCast(@alignCast(ctx));
@@ -85,7 +85,7 @@ const AnalogueInput = struct {
             hal.adc.start(.one_shot);
         }
 
-        slot.delay(10_000);
+        slot.delay(100);
     }
 
     pub fn start(self: *Self, slot: *sched.ScheduleSlot) void {
