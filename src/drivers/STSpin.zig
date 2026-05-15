@@ -355,6 +355,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
 
             if (self.speed == 0) {
                 // Loop while we wait for non-zero speed
+                try self.rtNotify(slot.now, true);
                 self.state = .MOVING;
                 slot.delay(IDLE_TIME);
             } else {
@@ -367,6 +368,7 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
             c.step_pin.put(0);
             self.state = .STEPPED;
 
+            // Update state as if the step was already complete.
             const delta: i32 = if (self.steps_remaining > 0) 1 else -1;
 
             self.current_position += delta;
@@ -378,9 +380,12 @@ fn stateMachine(ctx: *anyopaque, slot: *ScheduleSlot) !void {
 
             self.steps_remaining -= delta;
 
+            // Set the delay before sending the RT notification in case the
+            // RT handler changes speed, updating us_per_step.
             slot.delay(self.us_per_step - STEP_TIME);
 
-            // Set up for the next step
+            // Send the RT notification during our long wait to give it the
+            // best chance of completing without affecting our step timing.
             try self.rtNotify(slot.now, true);
         },
         .STEPPED => {
