@@ -220,6 +220,7 @@ fn recalculateSpeed(self: *Self) void {
     self.us_per_step = @max(STEP_TIME * 2, self.calculateStepUs(self.speed));
 }
 
+// Set the speed in RPM * 100
 pub fn setSpeed(self: *Self, rpm: u32) void {
     if (rpm != self.speed) {
         self.speed = rpm;
