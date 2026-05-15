@@ -188,7 +188,7 @@ pub fn canSetMicrostep(self: Self) bool {
 pub fn stop(self: *Self) void {
     if (self.state != .INIT) {
         self.state = .STOPPING;
-        self.setSpeedFloat(0);
+        self.setSpeed(0);
         self.steps_remaining = 0;
         self.phase = 0;
     }
