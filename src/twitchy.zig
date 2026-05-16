@@ -66,6 +66,32 @@ const pin_config = hal.pins.GlobalConfiguration{
     .GPIO26 = .{ .name = "busy", .direction = .out },
 };
 
+fn PidController(comptime T: type) type {
+    return struct {
+        const Self = @This();
+
+        Kp: T = 0,
+        Ki: T = 0,
+        Kd: T = 0,
+        set_point: T = 0,
+        prev_err: T = 0,
+        integral: T = 0,
+
+        pub fn set(self: *Self, value: T) void {
+            self.set_point = value;
+        }
+
+        pub fn update(self: *Self, current: T) T {
+            const err = self.set_point - current;
+            defer self.prev_err = err;
+            self.integral += err;
+            return self.Kp * err +
+                self.Ki * self.integral +
+                self.Kd * (err - self.prev_err);
+        }
+    };
+}
+
 const AnalogueInput = struct {
     const Self = @This();
     controller: *StepperController,
@@ -77,7 +103,7 @@ const AnalogueInput = struct {
 
         if (hal.adc.is_ready()) {
             const value = self.smoother.update(try hal.adc.read_result());
-            if (value != self.value) {
+            if (self.value == null or (value ^ self.value.?) > 1) {
                 self.value = value;
                 self.controller.set(value);
                 // std.log.info("input: {d:>5}", .{self.value.?});
