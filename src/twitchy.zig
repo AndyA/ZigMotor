@@ -98,12 +98,16 @@ const AnalogueInput = struct {
     value: ?u12 = null,
     smoother: Smoother(u12, 50) = .{},
 
+    fn delta(a: u12, b: u12) i13 {
+        return @as(i13, @intCast(a)) - @as(i13, @intCast(b));
+    }
+
     fn poll(ctx: *anyopaque, slot: *sched.ScheduleSlot) !void {
         const self: *Self = @ptrCast(@alignCast(ctx));
 
         if (hal.adc.is_ready()) {
             const value = self.smoother.update(try hal.adc.read_result());
-            if (self.value == null or (value ^ self.value.?) > 1) {
+            if (self.value == null or @abs(delta(value, self.value.?)) > 10) {
                 self.value = value;
                 self.controller.set(value);
                 // std.log.info("input: {d:>5}", .{self.value.?});
